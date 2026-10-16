@@ -1,0 +1,30 @@
+{
+  "product": "PrtSc",
+  "version": "0.8.0",
+  "target": "Windows 10/11 x64",
+  "preview": true,
+  "signed": false,
+  "exe_bytes": 2312192,
+  "sha256": "c78d2dd6e8967aa55137baacb8ceaab0e5506244ae5f5d9446a6072a9c4c0406",
+  "tests": {
+    "linux": 70,
+    "windows_exes_under_wine": 70,
+    "native_windows_hardware": false,
+    "snapshot_release_only_recording": true,
+    "snapshot_record_save_trigger": true,
+    "bound_snapshot_does_not_capture_while_recording": true,
+    "qr_result_inside_selection": true,
+    "qr_copy_keeps_editor_open": true,
+    "qr_open_dispatch_closes_editor": true,
+    "qr_open_test_only_local_url_handler": true,
+    "live_browser_navigation_verified": false,
+    "live_google_results_verified": false,
+    "native_mp4_output_verified": false
+  },
+  "changes": [
+    "Redrawn striped broad-faced snarling tiger icon with rounded ears",
+    "QR result inside selection near QR action",
+    "QR URL opens and closes editor on successful system dispatch; pages copy only",
+    "Focus-scoped PrintScreen recording with release-only support and blur cleanup"
+  ]
+}

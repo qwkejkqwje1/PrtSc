@@ -1,0 +1,8 @@
+shortcut=Ctrl+Alt+K readonly=1 overlay=0
+shortcut=PrintScreen readonly=1 overlay=0
+shortcut=PrintScreen readonly=1 overlay=0
+shortcut=PrintScreen readonly=1 overlay=0
+overlay=1 text_dialog=0 settings=0 recording=0
+shortcut=PrintScreen readonly=1 overlay=0
+shortcut=Ctrl+Shift+PrintScreen readonly=1 overlay=0
+overlay=1 text_dialog=0 settings=0 recording=0

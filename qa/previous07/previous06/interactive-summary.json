@@ -1,0 +1,23 @@
+{
+  "hotkey": "Ctrl+Alt+S",
+  "colors": {
+    "A": [
+      40,
+      190,
+      100,
+      255
+    ],
+    "P": [
+      203,
+      37,
+      92,
+      255
+    ]
+  },
+  "resized_export_size": [
+    946,
+    436
+  ],
+  "qr_copy_exact": true,
+  "editor_remains_open_after_qr": true
+}

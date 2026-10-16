@@ -1,0 +1,10 @@
+Fixture: http://127.0.0.1:19876/qr-test (synthetic local image)
+Selection: x100 y90 w680 h495
+QR row: x436 y557 w340 h24, fully INSIDE selection, near bottom QR action.
+Clipboard cleared. Click separate overlapping-pages target at 762,569:
+clipboard=http://127.0.0.1:19876/qr-test
+overlay=1 text_dialog=0
+Click URL text at 450,569:
+Test-only HKCR URL handler logged http://127.0.0.1:19876/qr-test
+overlay=0 text_dialog=0
+No external website contacted. Dispatch/close verified under Wine, not live default-browser navigation on real Windows.

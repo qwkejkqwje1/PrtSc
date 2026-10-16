@@ -1,0 +1,90 @@
+{
+  "externalNetwork": false,
+  "note": "Warm headless Chromium, synthetic 888x436 selection. Local intercepted multipart and 303 redirect; NOT Google result latency.",
+  "runs": [
+    {
+      "mode": "original",
+      "format": "png",
+      "width": 888,
+      "height": 436,
+      "bytes": 70520,
+      "method": "POST",
+      "referrer": null,
+      "multipart": true,
+      "field": true,
+      "filename": true,
+      "localRequests": 1,
+      "pageToPostMs": 114.23417399999994
+    },
+    {
+      "mode": "original",
+      "format": "png",
+      "width": 888,
+      "height": 436,
+      "bytes": 70520,
+      "method": "POST",
+      "referrer": null,
+      "multipart": true,
+      "field": true,
+      "filename": true,
+      "localRequests": 1,
+      "pageToPostMs": 133.67452600000001
+    },
+    {
+      "mode": "original",
+      "format": "png",
+      "width": 888,
+      "height": 436,
+      "bytes": 70520,
+      "method": "POST",
+      "referrer": null,
+      "multipart": true,
+      "field": true,
+      "filename": true,
+      "localRequests": 1,
+      "pageToPostMs": 149.61790999999994
+    },
+    {
+      "mode": "fast",
+      "format": "jpg",
+      "height": 436,
+      "width": 888,
+      "bytes": 39344,
+      "method": "POST",
+      "referrer": null,
+      "multipart": true,
+      "field": true,
+      "filename": true,
+      "localRequests": 1,
+      "pageToPostMs": 148.00151899999992
+    },
+    {
+      "mode": "fast",
+      "format": "jpg",
+      "height": 436,
+      "width": 888,
+      "bytes": 39344,
+      "method": "POST",
+      "referrer": null,
+      "multipart": true,
+      "field": true,
+      "filename": true,
+      "localRequests": 1,
+      "pageToPostMs": 108.42688099999987
+    },
+    {
+      "mode": "fast",
+      "format": "jpg",
+      "height": 436,
+      "width": 888,
+      "bytes": 39344,
+      "method": "POST",
+      "referrer": null,
+      "multipart": true,
+      "field": true,
+      "filename": true,
+      "localRequests": 1,
+      "pageToPostMs": 90.33956099999978
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+#define UNICODE
+#include <windows.h>
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+static void key(WORD k,int up){keybd_event(k,0,up?KEYEVENTF_KEYUP:0,0);}
+int main(int n,char**v){if(n<2)return 2;HWND s=FindWindowW(L"LumaSettings",NULL),m=FindWindowW(L"LumaMain",NULL);if(!strcmp(v[1],"focus")&&s){DWORD t=GetWindowThreadProcessId(s,NULL);AttachThreadInput(GetCurrentThreadId(),t,TRUE);SetForegroundWindow(s);SetFocus(GetDlgItem(s,114));AttachThreadInput(GetCurrentThreadId(),t,FALSE);return 0;}
+if(!strcmp(v[1],"read")&&s){wchar_t b[200];SendMessageW(GetDlgItem(s,114),WM_GETTEXT,200,(LPARAM)b);char u[600];WideCharToMultiByte(CP_UTF8,0,b,-1,u,600,NULL,NULL);printf("shortcut=%s readonly=%d overlay=%d\n",u,(GetWindowLongW(GetDlgItem(s,114),GWL_STYLE)&ES_READONLY)!=0,FindWindowW(L"LumaOverlay",NULL)!=NULL);return 0;}
+if(!strcmp(v[1],"press")&&n==4){int mods=atoi(v[2]),vk=atoi(v[3]);if(mods&2)key(VK_CONTROL,0);if(mods&1)key(VK_MENU,0);if(mods&4)key(VK_SHIFT,0);if(mods&8)key(VK_LWIN,0);key(vk,0);Sleep(70);key(vk,1);if(mods&8)key(VK_LWIN,1);if(mods&4)key(VK_SHIFT,1);if(mods&1)key(VK_MENU,1);if(mods&2)key(VK_CONTROL,1);Sleep(200);return 0;}
+if(!strcmp(v[1],"save")&&s){SendMessageW(s,WM_COMMAND,1,0);return FindWindowW(L"LumaSettings",NULL)?3:0;}
+if(!strcmp(v[1],"icons")&&m){HMODULE lib=LoadLibraryExW(L"Z:\\data\\prtsc07\\PrtSc-0.6.0\\target\\x86_64-pc-windows-gnu\\release\\PrtSc.exe",NULL,LOAD_LIBRARY_AS_DATAFILE);HICON a=LoadImageW(lib,MAKEINTRESOURCEW(1),IMAGE_ICON,32,32,0),b=LoadImageW(lib,MAKEINTRESOURCEW(1),IMAGE_ICON,16,16,0);printf("embedded_icons=%d,%d\n",a!=NULL,b!=NULL);HDC dc=GetDC(NULL),mem=CreateCompatibleDC(dc);BITMAPINFO bi={0};bi.bmiHeader.biSize=40;bi.bmiHeader.biWidth=96;bi.bmiHeader.biHeight=-48;bi.bmiHeader.biPlanes=1;bi.bmiHeader.biBitCount=32;void*p;HBITMAP bm=CreateDIBSection(dc,&bi,DIB_RGB_COLORS,&p,NULL,0);SelectObject(mem,bm);memset(p,0x40,96*48*4);DrawIconEx(mem,8,8,a,32,32,0,NULL,DI_NORMAL);DrawIconEx(mem,64,16,b,16,16,0,NULL,DI_NORMAL);GdiFlush();BITMAPFILEHEADER bf={0};bf.bfType=0x4d42;bf.bfOffBits=sizeof(bf)+40;bf.bfSize=bf.bfOffBits+96*48*4;FILE*f=fopen("Z:\\data\\qa07\\runtime-icons.bmp","wb");fwrite(&bf,sizeof(bf),1,f);fwrite(&bi.bmiHeader,40,1,f);fwrite(p,96*48*4,1,f);fclose(f);DeleteDC(mem);DeleteObject(bm);ReleaseDC(NULL,dc);return a&&b?0:4;}return 2;}

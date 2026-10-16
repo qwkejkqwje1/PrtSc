@@ -1,0 +1,7 @@
+/target/
+/dist/
+*.log
+settings.json
+last-metrics.json
+/history/
+/temporary/

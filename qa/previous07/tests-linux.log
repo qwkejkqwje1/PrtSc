@@ -1,0 +1,190 @@
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling unicode-ident v1.0.27
+   Compiling simd-adler32 v0.3.10
+   Compiling libm v0.2.16
+   Compiling adler2 v2.0.1
+   Compiling syn v3.0.9
+   Compiling serde_core v1.0.229
+   Compiling autocfg v1.5.1
+   Compiling crc32fast v1.5.2
+   Compiling cfg-if v1.0.5
+   Compiling num-traits v0.2.19
+   Compiling zmij v1.0.23
+   Compiling thiserror v2.0.21
+   Compiling thiserror-impl v2.0.21
+   Compiling core_maths v0.1.1
+   Compiling miniz_oxide v0.9.1
+   Compiling syn v2.0.119
+   Compiling arrayref v0.3.9
+   Compiling serde_json v1.0.154
+   Compiling strict-num v0.1.1
+   Compiling foldhash v0.1.5
+   Compiling equivalent v1.0.3
+   Compiling allocator-api2 v0.2.21
+   Compiling serde v1.0.229
+   Compiling bytemuck v1.25.2
+   Compiling tiny-skia-path v0.11.4
+   Compiling num-derive v0.4.2
+   Compiling hashbrown v0.15.5
+   Compiling flate2 v1.1.10
+   Compiling ttf-parser v0.25.1
+   Compiling serde_derive v1.0.229
+   Compiling miniz_oxide v0.8.9
+   Compiling fdeflate v0.3.7
+   Compiling luma-shot v0.7.0 (/data/prtsc07/PrtSc-0.6.0)
+   Compiling quick-error v2.0.1
+   Compiling arrayvec v0.7.8
+   Compiling bitflags v1.3.2
+   Compiling weezl v0.1.12
+   Compiling color_quant v1.1.0
+   Compiling itoa v1.0.18
+   Compiling log v0.4.34
+   Compiling memchr v2.8.3
+   Compiling byteorder-lite v0.1.0
+   Compiling image-webp v0.2.4
+   Compiling tiny-skia v0.11.4
+   Compiling gif v0.13.3
+   Compiling png v0.17.16
+   Compiling fontdue v0.9.4
+   Compiling quircs v0.10.3
+   Compiling jpeg-encoder v0.6.1
+   Compiling base64 v0.22.1
+warning: unused imports: `Engine` and `engine::general_purpose::STANDARD`
+ --> tests/core.rs:1:14
+  |
+1 | use base64::{engine::general_purpose::STANDARD, Engine};
+  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: `luma-shot` (test "core") generated 1 warning (run `cargo fix --test "core" -p luma-shot` to apply 1 suggestion)
+    Finished `test` profile [optimized + debuginfo] target(s) in 34.09s
+     Running unittests src/lib.rs (target/debug/deps/luma_shot-2596492673dc3e6e)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (target/debug/deps/PrtSc-26603941a3c3a172)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/core.rs (target/debug/deps/core-d016e8f14636b7d8)
+
+running 36 tests
+test add_undo_redo_preserves_shape ... ok
+test all_annotation_tools_render_without_panicking ... ok
+test blur_and_pixelate_only_touch_their_rect ... ok
+test config_rejects_invalid_export_and_values ... ok
+test crop_correct_pixels ... ok
+test delete_undo_retains_z_order ... ok
+test empty_crop_rejected ... ok
+test history_ids_do_not_allow_path_traversal ... ok
+test history_search_is_case_insensitive_and_ocr_aware ... ok
+test identical_scroll_frames_stop ... ok
+test invalid_dimensions_rejected ... ok
+test jpeg_and_webp_are_real_encoded_files ... ok
+test moving_is_undoable ... ok
+test new_edit_invalidates_redo ... ok
+test no_network_is_needed_to_render_ui ... ok
+test no_secrets_in_serialized_config ... ok
+test pick_topmost_shape ... ok
+test png_roundtrip ... ok
+test qr_blank_image_has_no_results ... ok
+test qr_decodes_local_fixture ... ok
+test rect_boundary_is_half_open ... ok
+test rect_clips_negative_origin ... ok
+test rect_extreme_coordinates_do_not_overflow ... ok
+test rect_outside_is_empty ... ok
+test rect_reverse_drag ... ok
+test redaction_is_burned_into_export ... ok
+test safe_link_scheme_is_limited ... ok
+test scrolling_mismatched_dimensions_rejected ... ok
+test scrolling_overlap_is_detected ... ok
+test selection_is_clipped_to_image ... ok
+test step_label_ink_has_aa_contrast_for_palette ... ok
+test step_numbers_follow_existing_maximum ... ok
+test toolbar_stays_inside_desktop ... ok
+test undo_is_not_capped_at_small_count ... ok
+test unknown_export_format_rejected ... ok
+test utc_conversion_and_encoding ... ok
+
+test result: ok. 36 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
+
+     Running tests/prtsc.rs (target/debug/deps/prtsc-b0a68581bc4e1388)
+
+running 10 tests
+test browser_handoff_auto_submits_only_png_to_google ... ok
+test compact_toolbar_has_no_ai_and_readable_hints ... ok
+test handoff_uses_random_unrelated_tokens ... ok
+test jpeg_quality_changes_actual_bytes ... ok
+test loopback_handoff_rejects_other_paths_and_is_single_use ... ok
+test old_settings_ignore_removed_integrations ... ok
+test only_one_secure_redaction_tool ... ok
+test opaque_export_has_no_original_secret_pixels ... ok
+test palette_and_export_settings_roundtrip ... ok
+test png_all_compressions_preserve_pixels ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/revision03.rs (target/debug/deps/revision03-df0f3ffff4a2af90)
+
+running 5 tests
+test gif_stream_has_real_frames_and_correct_timing ... ok
+test silent_defaults_and_hosts ... ok
+test upload_responses_reject_untrusted_links ... ok
+test uploads_are_only_png_multipart_and_allowlisted ... ok
+test utf16_cyrillic_and_surrogates ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/revision04.rs (target/debug/deps/revision04-c310212eef4b79c2)
+
+running 4 tests
+test icon_layouts_and_docking_keep_all_actions_and_hitboxes ... ok
+test links_only_explicit_http_urls ... ok
+test nv12_chroma_is_uv_not_vu ... ok
+test top_down_nv12_has_bright_top_and_dark_bottom ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/revision05.rs (target/debug/deps/revision05-495aeb780364771e)
+
+running 3 tests
+test attachment_edges_single_swatch_and_independent_qr ... ok
+test fast_google_payload_is_bounded_jpeg_original_is_exact_png ... ok
+test per_tool_colors_roundtrip_and_redaction_always_opaque ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+
+     Running tests/revision06.rs (target/debug/deps/revision06-984039939ae8270b)
+
+running 5 tests
+test all_eight_selection_edges_resize_without_scaling_annotations ... ok
+test compact_dimensions_and_qr_rows_do_not_cover_panels ... ok
+test custom_hotkeys_validate_and_persist ... ok
+test pen_default_order_and_dedicated_qr ... ok
+test tool_icons_retain_distinct_colors_including_active_tool ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/revision07.rs (target/debug/deps/revision07-8be5bd4efcae5c50)
+
+running 5 tests
+test badge_is_legible_and_icon_has_optical_sizes ... ok
+test browser_idle_preconnections_never_block_real_request ... ok
+test handoff_rejects_origin_and_wrong_host_before_valid_request ... ok
+test physical_shortcut_events_roundtrip ... ok
+test qr_open_and_copy_are_separate_targets ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+   Doc-tests luma_shot
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

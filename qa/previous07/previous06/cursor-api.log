@@ -1,0 +1,8 @@
+main
+GetCursorInfo=1 err=0 flags=1 h=0000000000020074 pos=180,180
+GetIconInfo=0 err=1402 hotspot=0,0 mask=0000000000000000 color=0000000000000000
+DrawIconEx=0 err=0 changed_bytes=0
+worker
+GetCursorInfo=1 err=0 flags=1 h=0000000000020074 pos=180,180
+GetIconInfo=0 err=1402 hotspot=0,0 mask=0000000000000000 color=0000000000000000
+DrawIconEx=0 err=0 changed_bytes=0

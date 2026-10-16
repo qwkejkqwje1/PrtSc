@@ -1,0 +1,8 @@
+shortcut=Ctrl+Alt+K readonly=1 overlay=1
+shortcut=PrintScreen readonly=1 overlay=1
+shortcut=Ctrl+Alt+K readonly=1 overlay=1
+shortcut=Ctrl+Alt+K readonly=1 overlay=1
+1
+shortcut=Ctrl+Alt+K readonly=1 overlay=0
+shortcut=Ctrl+Alt+K readonly=1 overlay=0
+embedded_icons=1,1

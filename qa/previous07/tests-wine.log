@@ -1,0 +1,110 @@
+=== core ===
+
+running 36 tests
+test add_undo_redo_preserves_shape ... ok
+test all_annotation_tools_render_without_panicking ... ok
+test blur_and_pixelate_only_touch_their_rect ... ok
+test config_rejects_invalid_export_and_values ... ok
+test crop_correct_pixels ... ok
+test delete_undo_retains_z_order ... ok
+test empty_crop_rejected ... ok
+test history_ids_do_not_allow_path_traversal ... ok
+test history_search_is_case_insensitive_and_ocr_aware ... ok
+test identical_scroll_frames_stop ... ok
+test invalid_dimensions_rejected ... ok
+test jpeg_and_webp_are_real_encoded_files ... ok
+test moving_is_undoable ... ok
+test new_edit_invalidates_redo ... ok
+test no_network_is_needed_to_render_ui ... ok
+test no_secrets_in_serialized_config ... ok
+test pick_topmost_shape ... ok
+test png_roundtrip ... ok
+test qr_blank_image_has_no_results ... ok
+test qr_decodes_local_fixture ... ok
+test rect_boundary_is_half_open ... ok
+test rect_clips_negative_origin ... ok
+test rect_extreme_coordinates_do_not_overflow ... ok
+test rect_outside_is_empty ... ok
+test rect_reverse_drag ... ok
+test redaction_is_burned_into_export ... ok
+test safe_link_scheme_is_limited ... ok
+test scrolling_mismatched_dimensions_rejected ... ok
+test scrolling_overlap_is_detected ... ok
+test selection_is_clipped_to_image ... ok
+test step_label_ink_has_aa_contrast_for_palette ... ok
+test step_numbers_follow_existing_maximum ... ok
+test toolbar_stays_inside_desktop ... ok
+test undo_is_not_capped_at_small_count ... ok
+test unknown_export_format_rejected ... ok
+test utc_conversion_and_encoding ... ok
+
+test result: ok. 36 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
+
+=== prtsc ===
+
+running 10 tests
+test browser_handoff_auto_submits_only_png_to_google ... ok
+test compact_toolbar_has_no_ai_and_readable_hints ... ok
+test handoff_uses_random_unrelated_tokens ... ok
+test jpeg_quality_changes_actual_bytes ... ok
+test loopback_handoff_rejects_other_paths_and_is_single_use ... ok
+test old_settings_ignore_removed_integrations ... ok
+test only_one_secure_redaction_tool ... ok
+test opaque_export_has_no_original_secret_pixels ... ok
+test palette_and_export_settings_roundtrip ... ok
+test png_all_compressions_preserve_pixels ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+=== revision03 ===
+
+running 5 tests
+test gif_stream_has_real_frames_and_correct_timing ... ok
+test silent_defaults_and_hosts ... ok
+test upload_responses_reject_untrusted_links ... ok
+test uploads_are_only_png_multipart_and_allowlisted ... ok
+test utf16_cyrillic_and_surrogates ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+=== revision04 ===
+
+running 4 tests
+test icon_layouts_and_docking_keep_all_actions_and_hitboxes ... ok
+test links_only_explicit_http_urls ... ok
+test nv12_chroma_is_uv_not_vu ... ok
+test top_down_nv12_has_bright_top_and_dark_bottom ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+=== revision05 ===
+
+running 3 tests
+test attachment_edges_single_swatch_and_independent_qr ... ok
+test fast_google_payload_is_bounded_jpeg_original_is_exact_png ... ok
+test per_tool_colors_roundtrip_and_redaction_always_opaque ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+=== revision06 ===
+
+running 5 tests
+test all_eight_selection_edges_resize_without_scaling_annotations ... ok
+test compact_dimensions_and_qr_rows_do_not_cover_panels ... ok
+test custom_hotkeys_validate_and_persist ... ok
+test pen_default_order_and_dedicated_qr ... ok
+test tool_icons_retain_distinct_colors_including_active_tool ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+=== revision07 ===
+
+running 5 tests
+test badge_is_legible_and_icon_has_optical_sizes ... ok
+test browser_idle_preconnections_never_block_real_request ... ok
+test handoff_rejects_origin_and_wrong_host_before_valid_request ... ok
+test physical_shortcut_events_roundtrip ... ok
+test qr_open_and_copy_are_separate_targets ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+

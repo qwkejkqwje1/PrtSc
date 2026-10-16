@@ -1,0 +1,90 @@
+{
+  "externalNetwork": false,
+  "note": "Eight idle preconnections held open. Warm headless Chromium, synthetic 888x436 selection. Local intercepted multipart and 303 redirect; NOT Google result latency.",
+  "runs": [
+    {
+      "mode": "original",
+      "format": "png",
+      "width": 888,
+      "height": 436,
+      "bytes": 70520,
+      "method": "POST",
+      "referrer": null,
+      "multipart": true,
+      "field": true,
+      "filename": true,
+      "localRequests": 1,
+      "pageToPostMs": 112.25623700000006
+    },
+    {
+      "mode": "original",
+      "format": "png",
+      "width": 888,
+      "height": 436,
+      "bytes": 70520,
+      "method": "POST",
+      "referrer": null,
+      "multipart": true,
+      "field": true,
+      "filename": true,
+      "localRequests": 1,
+      "pageToPostMs": 51.77719900000011
+    },
+    {
+      "mode": "original",
+      "format": "png",
+      "width": 888,
+      "height": 436,
+      "bytes": 70520,
+      "method": "POST",
+      "referrer": null,
+      "multipart": true,
+      "field": true,
+      "filename": true,
+      "localRequests": 1,
+      "pageToPostMs": 78.91284500000006
+    },
+    {
+      "mode": "fast",
+      "format": "jpg",
+      "height": 436,
+      "width": 888,
+      "bytes": 39344,
+      "method": "POST",
+      "referrer": null,
+      "multipart": true,
+      "field": true,
+      "filename": true,
+      "localRequests": 1,
+      "pageToPostMs": 61.1411750000002
+    },
+    {
+      "mode": "fast",
+      "format": "jpg",
+      "height": 436,
+      "width": 888,
+      "bytes": 39344,
+      "method": "POST",
+      "referrer": null,
+      "multipart": true,
+      "field": true,
+      "filename": true,
+      "localRequests": 1,
+      "pageToPostMs": 64.39777600000025
+    },
+    {
+      "mode": "fast",
+      "format": "jpg",
+      "height": 436,
+      "width": 888,
+      "bytes": 39344,
+      "method": "POST",
+      "referrer": null,
+      "multipart": true,
+      "field": true,
+      "filename": true,
+      "localRequests": 1,
+      "pageToPostMs": 35.94521900000018
+    }
+  ]
+}

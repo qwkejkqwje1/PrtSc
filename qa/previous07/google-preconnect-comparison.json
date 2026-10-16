@@ -1,0 +1,41 @@
+{
+  "note": "Same Windows binaries under Wine; synthetic 888x436 fast JPEG; local response only, NOT browser startup or Google result latency",
+  "runs": [
+    {
+      "version": "0.6",
+      "idleConnections": 0,
+      "localResponseMs": 3.41,
+      "responseBytes": 53332
+    },
+    {
+      "version": "0.6",
+      "idleConnections": 1,
+      "localResponseMs": 271.31,
+      "responseBytes": 53332
+    },
+    {
+      "version": "0.6",
+      "idleConnections": 8,
+      "localResponseMs": 2380.06,
+      "responseBytes": 53332
+    },
+    {
+      "version": "0.7",
+      "idleConnections": 0,
+      "localResponseMs": 1.09,
+      "responseBytes": 53446
+    },
+    {
+      "version": "0.7",
+      "idleConnections": 1,
+      "localResponseMs": 1.36,
+      "responseBytes": 53446
+    },
+    {
+      "version": "0.7",
+      "idleConnections": 8,
+      "localResponseMs": 1.99,
+      "responseBytes": 53446
+    }
+  ]
+}

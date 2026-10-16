@@ -1,0 +1,22 @@
+MajorImageVersion	0
+MajorSubsystemVersion	5
+MinorSubsystemVersion	2
+Subsystem		00000002	(Windows GUI)
+	DLL Name: advapi32.dll
+	DLL Name: bcrypt.dll
+	DLL Name: comctl32.dll
+	DLL Name: comdlg32.dll
+	DLL Name: gdi32.dll
+	DLL Name: kernel32.dll
+	DLL Name: ntdll.dll
+	DLL Name: ole32.dll
+	DLL Name: oleaut32.dll
+	DLL Name: shell32.dll
+	DLL Name: user32.dll
+	DLL Name: winhttp.dll
+	DLL Name: ws2_32.dll
+	DLL Name: api-ms-win-core-synch-l1-2-0.dll
+	DLL Name: bcryptprimitives.dll
+	DLL Name: KERNEL32.dll
+	DLL Name: msvcrt.dll
+	DLL Name: api-ms-win-core-winrt-l1-1-0.dll
