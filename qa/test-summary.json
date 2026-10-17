@@ -1,0 +1,57 @@
+{
+  "wine_passed": 91,
+  "runs": [
+    {
+      "exe": "PrtSc-2ea5d652711df8bb.exe",
+      "passed": 0
+    },
+    {
+      "exe": "PrtSc-97fb1e73f84e8942.exe",
+      "passed": 0
+    },
+    {
+      "exe": "core-181d776eb7bf4a0f.exe",
+      "passed": 36
+    },
+    {
+      "exe": "final_release-0c0f7db537d8975d.exe",
+      "passed": 15
+    },
+    {
+      "exe": "luma_shot-4cdb43f5f762e54c.exe",
+      "passed": 0
+    },
+    {
+      "exe": "prtsc-46f74dbfbf6de2c6.exe",
+      "passed": 10
+    },
+    {
+      "exe": "revision03-12e896b6920fd122.exe",
+      "passed": 5
+    },
+    {
+      "exe": "revision04-3e77c1f9e38ac64c.exe",
+      "passed": 4
+    },
+    {
+      "exe": "revision05-16b3df615ed99882.exe",
+      "passed": 3
+    },
+    {
+      "exe": "revision06-4030ade51a47ba90.exe",
+      "passed": 5
+    },
+    {
+      "exe": "revision07-416f62deca545816.exe",
+      "passed": 5
+    },
+    {
+      "exe": "revision08-eb80a917d733f86d.exe",
+      "passed": 2
+    },
+    {
+      "exe": "translation-45d1d50f98758c0e.exe",
+      "passed": 6
+    }
+  ]
+}

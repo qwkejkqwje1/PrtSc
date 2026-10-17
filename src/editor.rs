@@ -78,6 +78,14 @@ pub const TOOLS: [Tool; 11] = [
     Tool::Picker,
     Tool::Move,
 ];
+/// Extended tools stay in the More menu so the compact toolbar does not grow.
+pub fn tool_for_key(key: u8) -> Option<Tool> {
+    TOOLS
+        .iter()
+        .copied()
+        .chain([Tool::Blur, Tool::Pixelate])
+        .find(|t| t.key().as_bytes().first().copied() == Some(key))
+}
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Annotation {
     pub tool: Tool,
@@ -110,8 +118,13 @@ impl Annotation {
             maxy = maxy.max(p.y)
         }
         if self.tool == Tool::Text {
-            maxx = maxx.max(minx + self.text.chars().count() as f32 * self.width * 5.5);
-            maxy = maxy.max(miny + self.width * 10.0)
+            let r = crate::text::bounds(&self.text, crate::text::size(self.width));
+            return Rect {
+                x: minx.floor() as i32 + r.x,
+                y: miny.floor() as i32 + r.y,
+                w: r.w,
+                h: r.h,
+            };
         }
         if self.tool == Tool::Step {
             minx -= 18.;

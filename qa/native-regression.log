@@ -1,0 +1,42 @@
+win_final_probe state => overlay=0 settings=0 main=0
+win_final_probe state => overlay=1 settings=0 main=1
+win_final_probe command 101 => win_clipboard_probe clipboard Z:\data\qa-final\baseline.bmp => 888 x -436, 1548712 bytes
+win_final_probe state => overlay=0 settings=0 main=0
+win_final_probe state => overlay=1 settings=0 main=1
+win_gui_probe key 82 => win_gui_probe drag 300 300 450 400 => win_final_probe command 101 => win_clipboard_probe clipboard Z:\data\qa-final\rectangle.bmp => 888 x -436, 1548712 bytes
+win_final_probe state => overlay=0 settings=0 main=0
+win_final_probe state => overlay=1 settings=0 main=1
+win_gui_probe key 82 => win_gui_probe drag 300 300 450 400 => win_gui_probe key 77 => win_final_probe hold 375 350 425 390 => win_revision07_probe press 2 90 => win_final_probe command 101 => win_clipboard_probe clipboard Z:\data\qa-final\move-undo.bmp => 888 x -436, 1548712 bytes
+win_final_probe state => overlay=0 settings=0 main=0
+win_final_probe state => overlay=1 settings=0 main=1
+win_gui_probe key 82 => win_gui_probe drag 300 300 450 400 => win_gui_probe key 77 => win_final_probe hold 300 300 270 270 => win_revision07_probe press 2 90 => win_final_probe command 101 => win_clipboard_probe clipboard Z:\data\qa-final\resize-undo.bmp => 888 x -436, 1548712 bytes
+win_final_probe state => overlay=0 settings=0 main=0
+win_final_probe state => overlay=1 settings=0 main=1
+win_gui_probe key 82 => win_gui_probe drag 300 300 450 400 => win_gui_probe key 77 => win_final_probe hold 375 350 425 390 => win_final_probe command 101 => win_clipboard_probe clipboard Z:\data\qa-final\move-export.bmp => 888 x -436, 1548712 bytes
+win_final_probe state => overlay=0 settings=0 main=0
+win_final_probe state => overlay=1 settings=0 main=1
+win_gui_probe key 82 => win_final_probe hold 300 300 450 400 => win_final_probe command 102 => win_final_probe state => overlay=1 settings=0 main=1
+win_final_probe state => overlay=0 settings=0 main=1
+win_final_probe state => overlay=0 settings=0 main=0
+win_final_probe state => overlay=1 settings=0 main=1
+win_gui_probe key 84 => win_gui_probe key 189 => win_gui_probe key 189 => win_actions_probe click 300 300 => win_final_probe text-file Z:\data\qa-final\input-text.txt => win_gui_probe key 27 => win_final_probe state => overlay=1 settings=0 main=1
+win_final_probe command 101 => win_clipboard_probe clipboard Z:\data\qa-final\text-esc-export.bmp => 888 x -436, 1548712 bytes
+win_final_probe state => overlay=0 settings=0 main=0
+win_final_probe state => overlay=1 settings=0 main=1
+win_gui_probe key 84 => win_actions_probe click 300 300 => win_final_probe text still typing => win_revision07_probe press 2 67 => win_clipboard_probe clipboard Z:\data\qa-final\text-ctrl-c.bmp => 888 x -436, 1548712 bytes
+win_final_probe state => overlay=0 settings=0 main=1
+win_final_probe state => overlay=0 settings=0 main=0
+win_final_probe state => overlay=1 settings=0 main=1
+win_gui_probe key 27 => win_final_probe state => overlay=0 settings=0 main=1
+win_final_probe state => overlay=0 settings=0 main=0
+win_final_probe state => overlay=1 settings=0 main=1
+win_gui_probe key 68 => win_final_probe hold 300 350 450 410 => win_gui_probe key 13 => win_clipboard_probe clipboard Z:\data\qa-final\pending-redaction-final.bmp => 888 x -436, 1548712 bytes
+win_final_probe state => overlay=0 settings=0 main=0
+win_final_probe state => overlay=1 settings=0 main=1
+win_gui_probe key 27 => win_final_probe command 10 => win_gui_probe drag 188 177 1076 613 => win_final_probe resources => gdi=0 user=0
+win_final_probe stroke-bench => 80 strokes / 640 forced moves: 1975.68 ms (Wine only)
+win_final_probe resources => gdi=0 user=0
+win_final_probe command 101 => win_clipboard_probe clipboard Z:\data\qa-final\80-strokes.bmp => 888 x -436, 1548712 bytes
+win_final_probe command 11 => win_revision07_probe focus => win_revision07_probe press 3 75 => win_revision07_probe read => shortcut=Ctrl+Alt+K readonly=1 overlay=0
+win_revision08_probe snapshot-up => win_revision07_probe read => shortcut=PrintScreen readonly=1 overlay=0
+win_revision07_probe save => win_final_probe command 13 => 

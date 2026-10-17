@@ -2,8 +2,8 @@
 1 ICON "luma.ico"
 1 RT_MANIFEST "app.manifest"
 1 VERSIONINFO
-FILEVERSION 0,8,0,0
-PRODUCTVERSION 0,8,0,0
+FILEVERSION 1,1,0,0
+PRODUCTVERSION 1,1,0,0
 FILEOS 0x40004L
 FILETYPE 0x1L
 BEGIN
@@ -12,9 +12,9 @@ BEGIN
   BLOCK "040904B0"
   BEGIN
    VALUE "FileDescription", "PrtSc — native screenshots\0"
-   VALUE "FileVersion", "0.8.0\0"
+   VALUE "FileVersion", "1.1.0\0"
    VALUE "ProductName", "PrtSc\0"
-   VALUE "ProductVersion", "0.8.0\0"
+   VALUE "ProductVersion", "1.1.0\0"
    VALUE "LegalCopyright", "MIT License\0"
   END
  END

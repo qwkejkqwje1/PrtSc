@@ -1,0 +1,36 @@
+{
+  "environment": "Wine/Xvfb; not native Windows acceptance",
+  "gif": [
+    {
+      "cursor": true,
+      "frames": 22,
+      "gif_ms": 2180,
+      "report": {
+        "frames": 22,
+        "height": 495,
+        "seconds": 2.2134042,
+        "width": 680
+      },
+      "dark_pointer_pixels_minmax": [
+        73,
+        79
+      ]
+    },
+    {
+      "cursor": false,
+      "frames": 22,
+      "gif_ms": 2190,
+      "report": {
+        "frames": 22,
+        "height": 495,
+        "seconds": 2.2117602,
+        "width": 680
+      },
+      "dark_pointer_pixels_minmax": [
+        0,
+        0
+      ]
+    }
+  ],
+  "mp4_runtime": "text=MP4 container creation: 0xD0000005. Select GIF if Windows Media Foundation is unavailable.\nopen_link_button=0\n"
+}

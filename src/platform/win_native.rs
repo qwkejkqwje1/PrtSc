@@ -28,45 +28,58 @@ pub unsafe fn screen_rect() -> Rect {
 pub fn capture(r: Rect) -> Result<Image, String> {
     capture_frame(r, false)
 }
-pub fn capture_frame(r: Rect, include_cursor: bool) -> Result<Image, String> {
-    unsafe {
-        let mut image = Image::new(r.w, r.h)?;
-        let src = GetDC(null_mut());
-        if src.is_null() {
-            return Err(last("GetDC"));
+/// Owns the screen DC and one top-down DIB for the whole recording.
+/// Returned BGRA pixels are borrowed until the next capture, never cached by callers.
+pub struct ScreenCapturer {
+    region: Rect,
+    source: HDC,
+    raster: Raster,
+    bits: *const u8,
+}
+impl ScreenCapturer {
+    pub fn new(region: Rect) -> Result<Self, String> {
+        let raster = Raster::empty(region.w, region.h)?;
+        unsafe {
+            let mut bm: BITMAP = zeroed();
+            if GetObjectW(
+                raster.bitmap,
+                size_of::<BITMAP>() as i32,
+                &mut bm as *mut _ as _,
+            ) == 0
+                || bm.bmBits.is_null()
+            {
+                return Err(last("Capture DIB pixels"));
+            }
+            let source = GetDC(null_mut());
+            if source.is_null() {
+                return Err(last("GetDC"));
+            }
+            Ok(Self {
+                region,
+                source,
+                raster,
+                bits: bm.bmBits as *const u8,
+            })
         }
-        let dc = CreateCompatibleDC(src);
-        if dc.is_null() {
-            ReleaseDC(null_mut(), src);
-            return Err(last("CreateCompatibleDC"));
-        }
-        let mut bmi: BITMAPINFO = zeroed();
-        bmi.bmiHeader.biSize = size_of::<BITMAPINFOHEADER>() as u32;
-        bmi.bmiHeader.biWidth = r.w as i32;
-        bmi.bmiHeader.biHeight = -(r.h as i32);
-        bmi.bmiHeader.biPlanes = 1;
-        bmi.bmiHeader.biBitCount = 32;
-        bmi.bmiHeader.biCompression = BI_RGB;
-        let mut bits = null_mut();
-        let bmp = CreateDIBSection(src, &bmi, DIB_RGB_COLORS, &mut bits, null_mut(), 0);
-        if bmp.is_null() {
-            DeleteDC(dc);
-            ReleaseDC(null_mut(), src);
-            return Err(last("CreateDIBSection"));
-        }
-        let old = SelectObject(dc, bmp);
-        let ok = BitBlt(
-            dc,
-            0,
-            0,
-            r.w as i32,
-            r.h as i32,
-            src,
-            r.x,
-            r.y,
-            SRCCOPY | CAPTUREBLT,
-        );
-        if ok != 0 {
+    }
+    pub fn capture_bgra(&mut self, include_cursor: bool) -> Result<&[u8], String> {
+        unsafe {
+            let r = self.region;
+            let dc = self.raster.dc;
+            if BitBlt(
+                dc,
+                0,
+                0,
+                r.w as i32,
+                r.h as i32,
+                self.source,
+                r.x,
+                r.y,
+                SRCCOPY | CAPTUREBLT,
+            ) == 0
+            {
+                return Err(last("BitBlt"));
+            }
             if include_cursor {
                 let mut ci: CURSORINFO = zeroed();
                 ci.cbSize = size_of::<CURSORINFO>() as u32;
@@ -102,25 +115,35 @@ pub fn capture_frame(r: Rect, include_cursor: bool) -> Result<Image, String> {
                 }
             }
             GdiFlush();
-            std::ptr::copy_nonoverlapping(
-                bits as *const u8,
-                image.rgba.as_mut_ptr(),
-                image.rgba.len(),
-            );
-            for p in image.rgba.chunks_exact_mut(4) {
-                p.swap(0, 2);
-                p[3] = 255
-            }
+            Ok(std::slice::from_raw_parts(
+                self.bits,
+                r.w as usize * r.h as usize * 4,
+            ))
         }
-        SelectObject(dc, old);
-        DeleteObject(bmp);
-        DeleteDC(dc);
-        ReleaseDC(null_mut(), src);
-        if ok == 0 {
-            return Err(last("BitBlt"));
-        }
-        Ok(image)
     }
+    pub fn capture_into(&mut self, image: &mut Image, include_cursor: bool) -> Result<(), String> {
+        if (image.width, image.height) != (self.region.w, self.region.h) {
+            return Err("Capture dimensions changed".into());
+        }
+        let bytes = self.capture_bgra(include_cursor)?;
+        for (dst, src) in image.rgba.chunks_exact_mut(4).zip(bytes.chunks_exact(4)) {
+            dst.copy_from_slice(&[src[2], src[1], src[0], 255]);
+        }
+        Ok(())
+    }
+}
+impl Drop for ScreenCapturer {
+    fn drop(&mut self) {
+        unsafe {
+            ReleaseDC(null_mut(), self.source);
+        }
+    }
+}
+pub fn capture_frame(r: Rect, include_cursor: bool) -> Result<Image, String> {
+    let mut capturer = ScreenCapturer::new(r)?;
+    let mut image = Image::new(r.w, r.h)?;
+    capturer.capture_into(&mut image, include_cursor)?;
+    Ok(image)
 }
 pub unsafe fn blit(hdc: HDC, image: &Image, w: i32, h: i32) {
     let mut bmi: BITMAPINFO = zeroed();
@@ -417,7 +440,12 @@ pub struct Raster {
     pub height: i32,
 }
 impl Raster {
-    pub fn new(image: &Image, dim: bool) -> Result<Self, String> {
+    /// A persistent top-down DIB. No unnecessary CPU copy on allocation.
+    pub fn empty(width: u32, height: u32) -> Result<Self, String> {
+        if width == 0 || height == 0 || width as u64 * height as u64 > luma_shot::image::MAX_PIXELS
+        {
+            return Err("Invalid raster dimensions".into());
+        }
         unsafe {
             let dc = CreateCompatibleDC(null_mut());
             if dc.is_null() {
@@ -425,8 +453,8 @@ impl Raster {
             }
             let mut bmi: BITMAPINFO = zeroed();
             bmi.bmiHeader.biSize = size_of::<BITMAPINFOHEADER>() as u32;
-            bmi.bmiHeader.biWidth = image.width as i32;
-            bmi.bmiHeader.biHeight = -(image.height as i32);
+            bmi.bmiHeader.biWidth = width as i32;
+            bmi.bmiHeader.biHeight = -(height as i32);
             bmi.bmiHeader.biPlanes = 1;
             bmi.bmiHeader.biBitCount = 32;
             let mut bits = null_mut();
@@ -436,24 +464,66 @@ impl Raster {
                 return Err(last("CreateDIBSection"));
             }
             let old = SelectObject(dc, bitmap);
-            let pixels = std::slice::from_raw_parts_mut(bits as *mut u8, image.rgba.len());
-            for (dst, src) in pixels.chunks_exact_mut(4).zip(image.rgba.chunks_exact(4)) {
-                let factor = if dim { 40u16 } else { 100 };
-                dst.copy_from_slice(&[
-                    (src[2] as u16 * factor / 100) as u8,
-                    (src[1] as u16 * factor / 100) as u8,
-                    (src[0] as u16 * factor / 100) as u8,
-                    255,
-                ]);
-            }
             Ok(Self {
                 dc,
                 bitmap,
                 old,
-                width: image.width as i32,
-                height: image.height as i32,
+                width: width as i32,
+                height: height as i32,
             })
         }
+    }
+    pub fn new(image: &Image, dim: bool) -> Result<Self, String> {
+        let mut raster = Self::empty(image.width, image.height)?;
+        raster.update_region(
+            image,
+            Rect {
+                x: 0,
+                y: 0,
+                w: image.width,
+                h: image.height,
+            },
+            dim,
+        )?;
+        Ok(raster)
+    }
+    pub fn update_region(&mut self, image: &Image, r: Rect, dim: bool) -> Result<(), String> {
+        if image.width != self.width as u32 || image.height != self.height as u32 {
+            return Err("Raster dimensions changed".into());
+        }
+        let r = r.clamp(image.width, image.height);
+        if !r.valid() {
+            return Ok(());
+        }
+        unsafe {
+            // CPU writes must not race pending GDI reads of this DIB.
+            GdiFlush();
+            let mut bm: BITMAP = zeroed();
+            if GetObjectW(
+                self.bitmap,
+                size_of::<BITMAP>() as i32,
+                &mut bm as *mut _ as _,
+            ) == 0
+                || bm.bmBits.is_null()
+            {
+                return Err(last("DIB pixels"));
+            }
+            let pixels = std::slice::from_raw_parts_mut(bm.bmBits as *mut u8, image.rgba.len());
+            let f = if dim { 40u16 } else { 100 };
+            for y in r.y as usize..r.y as usize + r.h as usize {
+                for x in r.x as usize..r.x as usize + r.w as usize {
+                    let i = (y * image.width as usize + x) * 4;
+                    let p = &image.rgba[i..i + 4];
+                    pixels[i..i + 4].copy_from_slice(&[
+                        (p[2] as u16 * f / 100) as u8,
+                        (p[1] as u16 * f / 100) as u8,
+                        (p[0] as u16 * f / 100) as u8,
+                        255,
+                    ]);
+                }
+            }
+        }
+        Ok(())
     }
     pub unsafe fn paint(&self, dc: HDC, r: RECT) {
         BitBlt(
@@ -549,7 +619,7 @@ pub fn upload(image: &Image, service: &str, client_id: &str) -> Result<String, S
             return Err("Imgur: enter your application's Client ID in Settings (not your account password).".into());
         }
         let session = Handle(WinHttpOpen(
-            wide("PrtSc/0.3").as_ptr(),
+            wide(concat!("PrtSc/", env!("CARGO_PKG_VERSION"))).as_ptr(),
             WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
             null(),
             null(),

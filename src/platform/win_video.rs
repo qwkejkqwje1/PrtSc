@@ -17,10 +17,13 @@ use windows_sys::Win32::{
     System::{Com::*, LibraryLoader::*},
 };
 type Ptr = *mut std::ffi::c_void;
+type BufferFactory = unsafe extern "system" fn(u32, *mut Ptr) -> HRESULT;
+type SampleFactory = unsafe extern "system" fn(*mut Ptr) -> HRESULT;
 struct Runtime {
     plat: HMODULE,
     read: HMODULE,
-    shutdown: unsafe extern "system" fn() -> HRESULT,
+    shutdown: Option<unsafe extern "system" fn() -> HRESULT>,
+    started: bool,
     com: bool,
 }
 impl Runtime {
@@ -41,19 +44,22 @@ impl Runtime {
             CoUninitialize();
             return Err("MP4 needs Windows Media Feature Pack. Select GIF instead.".into());
         }
+        // RAII starts before symbol lookup, so missing factories cannot leak COM/DLLs.
+        let mut r = Self {
+            plat,
+            read,
+            shutdown: None,
+            started: false,
+            com: true,
+        };
         let start: unsafe extern "system" fn(u32, u32) -> HRESULT = std::mem::transmute(
             GetProcAddress(plat, b"MFStartup\0".as_ptr()).ok_or("MFStartup missing")?,
         );
-        let shutdown = std::mem::transmute(
+        r.shutdown = Some(std::mem::transmute(
             GetProcAddress(plat, b"MFShutdown\0".as_ptr()).ok_or("MFShutdown missing")?,
-        );
-        let r = Self {
-            plat,
-            read,
-            shutdown,
-            com: true,
-        };
+        ));
         start(MF_VERSION, 0).ok().map_err(|e| e.to_string())?;
+        r.started = true;
         Ok(r)
     }
     unsafe fn create<T: Interface>(&self, name: &[u8]) -> Result<T, String> {
@@ -71,7 +77,11 @@ impl Runtime {
 impl Drop for Runtime {
     fn drop(&mut self) {
         unsafe {
-            let _ = (self.shutdown)();
+            if self.started {
+                if let Some(shutdown) = self.shutdown {
+                    let _ = shutdown();
+                }
+            }
             FreeLibrary(self.read);
             FreeLibrary(self.plat);
             if self.com {
@@ -85,12 +95,34 @@ pub struct Mp4 {
     stream: u32,
     width: u32,
     height: u32,
-    runtime: Runtime,
+    _runtime: Runtime,
+    buffer_factory: BufferFactory,
+    sample_factory: SampleFactory,
+    nv12: Vec<u8>,
+    clock: luma_shot::video::SampleClock,
+    nominal_duration: i64,
 }
 impl Mp4 {
     pub fn new(path: &Path, w: u32, h: u32, fps: u32, bitrate: u32) -> Result<Self, String> {
+        if w == 0
+            || h == 0
+            || w % 2 != 0
+            || h % 2 != 0
+            || fps == 0
+            || w as u64 * h as u64 > luma_shot::image::MAX_PIXELS
+        {
+            return Err("Invalid MP4 dimensions or FPS".into());
+        }
         unsafe {
             let runtime = Runtime::new()?;
+            let buffer_factory = std::mem::transmute(
+                GetProcAddress(runtime.plat, b"MFCreateMemoryBuffer\0".as_ptr())
+                    .ok_or("MF buffer factory missing")?,
+            );
+            let sample_factory = std::mem::transmute(
+                GetProcAddress(runtime.plat, b"MFCreateSample\0".as_ptr())
+                    .ok_or("MF sample factory missing")?,
+            );
             let create: unsafe extern "system" fn(*const u16, Ptr, Ptr, *mut Ptr) -> HRESULT =
                 std::mem::transmute(
                     GetProcAddress(runtime.read, b"MFCreateSinkWriterFromURL\0".as_ptr())
@@ -139,7 +171,12 @@ impl Mp4 {
                 stream,
                 width: w,
                 height: h,
-                runtime,
+                _runtime: runtime,
+                buffer_factory,
+                sample_factory,
+                nv12: Vec::new(),
+                clock: Default::default(),
+                nominal_duration: 10_000_000 / fps as i64,
             })
         }
     }
@@ -147,28 +184,49 @@ impl Mp4 {
         if (image.width, image.height) != (self.width, self.height) {
             return Err("Video frame size changed".into());
         }
+        luma_shot::video::nv12_into(image, &mut self.nv12)?;
+        self.write_pending(time, duration)
+    }
+    pub fn push_bgra(&mut self, bytes: &[u8], tick: i64) -> Result<(), String> {
+        if let Some((time, duration)) = self.clock.push(tick) {
+            self.write_pending(time, duration)?;
+        }
+        luma_shot::video::nv12_bgra_into(bytes, self.width, self.height, &mut self.nv12)
+    }
+    fn write_pending(&self, time: i64, duration: i64) -> Result<(), String> {
+        if time < 0 || duration <= 0 {
+            return Err("Invalid sample timestamp".into());
+        }
         unsafe {
-            let create: unsafe extern "system" fn(u32, *mut Ptr) -> HRESULT = std::mem::transmute(
-                GetProcAddress(self.runtime.plat, b"MFCreateMemoryBuffer\0".as_ptr())
-                    .ok_or("MF buffer factory missing")?,
-            );
             let mut p = null_mut();
-            let nv12 = luma_shot::video::nv12(image)?;
-            create(nv12.len() as u32, &mut p)
+            (self.buffer_factory)(self.nv12.len() as u32, &mut p)
                 .ok()
                 .map_err(|e| e.to_string())?;
+            if p.is_null() {
+                return Err("MF buffer factory returned null".into());
+            }
             let buffer = IMFMediaBuffer::from_raw(p);
             let mut pixels = null_mut();
             buffer
                 .Lock(&mut pixels, None, None)
                 .map_err(|e| e.to_string())?;
-            let dst = std::slice::from_raw_parts_mut(pixels, nv12.len());
-            dst.copy_from_slice(&nv12);
+            if pixels.is_null() {
+                let _ = buffer.Unlock();
+                return Err("MF buffer pixels unavailable".into());
+            }
+            std::ptr::copy_nonoverlapping(self.nv12.as_ptr(), pixels, self.nv12.len());
             buffer.Unlock().map_err(|e| e.to_string())?;
             buffer
-                .SetCurrentLength(dst.len() as u32)
+                .SetCurrentLength(self.nv12.len() as u32)
                 .map_err(|e| e.to_string())?;
-            let sample: IMFSample = self.runtime.create(b"MFCreateSample\0")?;
+            let mut p = null_mut();
+            (self.sample_factory)(&mut p)
+                .ok()
+                .map_err(|e| e.to_string())?;
+            if p.is_null() {
+                return Err("MF sample factory returned null".into());
+            }
+            let sample = IMFSample::from_raw(p);
             sample
                 .AddBuffer(&buffer)
                 .and_then(|_| sample.SetSampleTime(time))
@@ -177,10 +235,20 @@ impl Mp4 {
                 .map_err(|e| e.to_string())
         }
     }
-    pub fn finish(self) -> Result<(), String> {
+    pub fn finish_at(mut self, end: i64) -> Result<(), String> {
+        if let Some((time, duration)) = self.clock.finish(end) {
+            self.write_pending(time, duration)?;
+        }
+        unsafe { self.writer.Finalize().map_err(|e| e.to_string()) }
+    }
+    pub fn finish(mut self) -> Result<(), String> {
+        if let Some((time, _)) = self.clock.finish(0) {
+            self.write_pending(time, self.nominal_duration)?;
+        }
         unsafe { self.writer.Finalize().map_err(|e| e.to_string()) }
     }
 }
+
 pub struct Report {
     pub path: PathBuf,
     pub frames: u64,
@@ -197,6 +265,9 @@ pub fn record(
     include_cursor: bool,
     stop: Arc<AtomicBool>,
 ) -> Result<Report, String> {
+    if fps == 0 {
+        return Err("Recording FPS must be positive".into());
+    }
     let tmp = path.with_file_name(format!(
         "{}.partial.{}",
         path.file_stem().unwrap_or_default().to_string_lossy(),
@@ -234,25 +305,58 @@ pub fn record(
         let started = Instant::now();
         let mut frames = 0u64;
         let mut next = started;
-        let mut last_tick = 0i64;
+        let mut capturer = native::ScreenCapturer::new(region)?;
+        // GIF needs RGBA for quantization, MP4 goes directly from BGRA to NV12.
+        let mut image = if gif {
+            Some(Image::new(region.w, region.h)?)
+        } else {
+            None
+        };
+        let mut pending = if gif {
+            Some(Image::new(width, height)?)
+        } else {
+            None
+        };
+        let mut scaled = if gif && scale < 1. {
+            Some(Image::new(width, height)?)
+        } else {
+            None
+        };
+        let mut clock = luma_shot::video::SampleClock::default();
+        let mut origin = None;
+        let mut gif_remainder = 0i64;
+        let mut gif_frame =
+            |g: &mut luma_shot::video::Gif, frame: &Image, duration: i64| -> Result<(), String> {
+                let total = duration + gif_remainder;
+                let delay = (total / 100_000).clamp(1, 65535);
+                gif_remainder = total - delay * 100_000;
+                g.frame_with_delay(frame, delay as u16)
+            };
         while !stop.load(Ordering::Relaxed) && started.elapsed() < Duration::from_secs(3600) {
-            let mut image = native::capture_frame(region, include_cursor)?;
-            if scale < 1. {
-                image = luma_shot::render::resized(&image, width, height)?;
+            if let Some(current) = image.as_mut() {
+                capturer.capture_into(current, include_cursor)?;
             }
-            let tick = (started.elapsed().as_secs_f64() * 10_000_000.) as i64;
+            let bgra = if !gif {
+                Some(capturer.capture_bgra(include_cursor)?)
+            } else {
+                None
+            };
+            let now_tick = (started.elapsed().as_secs_f64() * 10_000_000.) as i64;
+            let tick = now_tick - *origin.get_or_insert(now_tick);
             if let Some(g) = gif_writer.as_mut() {
-                let delay = if frames == 0 {
-                    100 / fps as i64
+                if let Some((_, duration)) = clock.push(tick) {
+                    gif_frame(g, pending.as_ref().unwrap(), duration)?;
+                }
+                let current = image.as_mut().unwrap();
+                if let Some(scaled) = scaled.as_mut() {
+                    luma_shot::render::resize_into(current, scaled)?;
+                    std::mem::swap(scaled, pending.as_mut().unwrap());
                 } else {
-                    (tick - last_tick) / 100_000
-                };
-                g.frame_with_delay(&image, delay.clamp(1, 65535) as u16)?;
-                last_tick = tick;
+                    std::mem::swap(current, pending.as_mut().unwrap());
+                }
             }
             if let Some(m) = mp4.as_mut() {
-                m.frame(&image, tick.max(last_tick), 10_000_000 / fps as i64)?;
-                last_tick = tick + 1;
+                m.push_bgra(bgra.unwrap(), tick)?;
             }
             frames += 1;
             next += period;
@@ -266,11 +370,15 @@ pub fn record(
         if frames == 0 {
             return Err("Recording cancelled before the first frame".into());
         }
-        if let Some(g) = gif_writer {
+        let end = ((started.elapsed().as_secs_f64() * 10_000_000.) as i64 - origin.unwrap()).max(1);
+        if let Some(mut g) = gif_writer {
+            if let Some((_, duration)) = clock.finish(end) {
+                gif_frame(&mut g, pending.as_ref().unwrap(), duration)?;
+            }
             g.finish()?;
         }
         if let Some(m) = mp4 {
-            m.finish()?;
+            m.finish_at(end)?;
         }
         std::fs::rename(&tmp, &path).map_err(|e| e.to_string())?;
         Ok(Report {

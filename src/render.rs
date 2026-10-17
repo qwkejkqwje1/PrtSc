@@ -3,8 +3,11 @@ use crate::{
     image::{Image, Rect},
 };
 use tiny_skia::{Color, FillRule, Paint, PathBuilder, PixmapMut, Stroke, Transform};
+type Glyph = (fontdue::Metrics, std::rc::Rc<[u8]>);
 pub struct Renderer {
-    pub font: Option<fontdue::Font>,
+    pub font: Option<&'static fontdue::Font>,
+    glyphs: std::cell::RefCell<std::collections::HashMap<(char, u32), Glyph>>,
+    glyph_bytes: std::cell::Cell<usize>,
 }
 impl Default for Renderer {
     fn default() -> Self {
@@ -12,32 +15,74 @@ impl Default for Renderer {
     }
 }
 impl Renderer {
-    pub fn new() -> Self {
-        let mut paths = vec![];
-        if let Ok(w) = std::env::var("WINDIR") {
-            paths.push(format!("{w}/Fonts/segoeui.ttf"));
-            paths.push(format!("{w}/Fonts/arial.ttf"));
-            paths.push(format!("{w}/Fonts/tahoma.ttf"));
+    pub fn unloaded() -> Self {
+        Self {
+            font: None,
+            glyphs: Default::default(),
+            glyph_bytes: Default::default(),
         }
-        paths.extend(
-            [
-                "/usr/share/fonts/truetype/msttcorefonts/Arial.ttf",
-                "/usr/share/fonts/msttcore/arial.ttf",
-                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-                "/usr/share/fonts/dejavu-sans-fonts/DejaVuSans.ttf",
-                "/System/Library/Fonts/Supplemental/Arial.ttf",
-            ]
-            .map(String::from),
-        );
-        let font = paths.into_iter().find_map(|p| {
-            std::fs::read(p)
-                .ok()
-                .and_then(|b| fontdue::Font::from_bytes(b, fontdue::FontSettings::default()).ok())
-        });
-        Self { font }
+    }
+    pub fn new() -> Self {
+        Self {
+            font: crate::text::font(),
+            ..Self::unloaded()
+        }
+    }
+    fn glyph(&self, ch: char, size: f32) -> Option<Glyph> {
+        let font = self.font?;
+        let key = (ch, size.to_bits());
+        if let Some(g) = self.glyphs.borrow().get(&key) {
+            return Some(g.clone());
+        }
+        let (m, b) = font.rasterize(ch, size);
+        let bytes = b.len();
+        let g = (m, std::rc::Rc::<[u8]>::from(b));
+        // QR/text input must not grow an unbounded glyph cache.
+        if bytes <= 4 * 1024 * 1024 {
+            let mut cache = self.glyphs.borrow_mut();
+            if cache.len() >= 1024 || self.glyph_bytes.get() + bytes > 4 * 1024 * 1024 {
+                cache.clear();
+                self.glyph_bytes.set(0);
+            }
+            cache.insert(key, g.clone());
+            self.glyph_bytes.set(self.glyph_bytes.get() + bytes);
+        }
+        Some(g)
+    }
+    pub fn glyph_cache_stats(&self) -> (usize, usize) {
+        (self.glyphs.borrow().len(), self.glyph_bytes.get())
+    }
+    pub fn bounds(&self, a: &Annotation) -> Rect {
+        let r = a.rect();
+        let pad = match a.tool {
+            Tool::Text => 2.,
+            Tool::Arrow => (a.width * 4.5).max(14.) + a.width,
+            Tool::Step => 4.,
+            Tool::Redact | Tool::Highlight | Tool::Blur | Tool::Pixelate => 0.,
+            _ => a.width * 0.5 + 3.,
+        };
+        let mut result = crate::damage::expand(r, pad.ceil() as u32);
+        if a.tool == Tool::Step && !a.points.is_empty() {
+            let t = a.number.to_string();
+            let w = self.text_width(&t, 18.);
+            let rr = crate::text::bounds(&t, 18.);
+            let p = a.points[0];
+            result = crate::damage::union(
+                result,
+                Rect {
+                    x: (p.x - w / 2.).floor() as i32 + rr.x,
+                    y: (p.y - 9.).floor() as i32 + rr.y,
+                    w: rr.w,
+                    h: rr.h,
+                },
+            );
+        }
+        result
     }
     pub fn text(&self, img: &mut Image, x: f32, y: f32, text: &str, size: f32, color: [u8; 4]) {
-        let Some(font) = &self.font else { return };
+        if self.font.is_none() {
+            return;
+        }
         let mut px = x;
         let mut py = y;
         for ch in text.chars() {
@@ -46,7 +91,9 @@ impl Renderer {
                 py += size * 1.4;
                 continue;
             }
-            let (m, b) = font.rasterize(ch, size);
+            let Some((m, b)) = self.glyph(ch, size) else {
+                continue;
+            };
             for gy in 0..m.height {
                 for gx in 0..m.width {
                     let xx = px as i32 + m.xmin + gx as i32;
@@ -71,6 +118,30 @@ impl Renderer {
             .as_ref()
             .map(|f| text.chars().map(|c| f.metrics(c, size).advance_width).sum())
             .unwrap_or(text.len() as f32 * size * 0.5)
+    }
+    pub fn elide(&self, text: &str, size: f32, max_width: f32) -> String {
+        if self.text_width(text, size) <= max_width {
+            return text.into();
+        }
+        let mut result = String::new();
+        let mut width = 0.;
+        let ellipsis = self.text_width("…", size);
+        if ellipsis > max_width {
+            return result;
+        }
+        for c in text.chars() {
+            let cw = self
+                .font
+                .map(|f| f.metrics(c, size).advance_width)
+                .unwrap_or(size);
+            if width + cw + ellipsis > max_width {
+                break;
+            }
+            width += cw;
+            result.push(c);
+        }
+        result.push('…');
+        result
     }
     pub fn flatten(&self, base: &Image, shapes: &[Annotation]) -> Image {
         let mut out = base.clone();
@@ -153,8 +224,8 @@ impl Renderer {
             Tool::Ellipse => ellipse(out, r, color, a.width, false),
             Tool::Highlight => {
                 let mut c = color;
-                c[3] = 75;
-                fill_rect(out, r, c)
+                c[3] = 110;
+                multiply_rect(out, r, c)
             }
             Tool::Redact => fill_rect(out, r, [24, 24, 27, 255]),
             Tool::Pixelate => pixelate(out, r, (a.width * 4.).max(8.) as u32),
@@ -174,6 +245,23 @@ impl Renderer {
             }
             _ => {}
         }
+    }
+}
+/// Multiply highlighter preserves black text and uses the same opaque-image contract as fill_rect.
+pub fn multiply_rect(img: &mut Image, r: Rect, c: [u8; 4]) {
+    let r = r.clamp(img.width, img.height);
+    if !r.valid() {
+        return;
+    }
+    let Some(rr) = tiny_skia::Rect::from_xywh(r.x as f32, r.y as f32, r.w as f32, r.h as f32)
+    else {
+        return;
+    };
+    let mut p = Paint::default();
+    p.set_color_rgba8(c[0], c[1], c[2], c[3]);
+    p.blend_mode = tiny_skia::BlendMode::Multiply;
+    if let Some(mut pm) = PixmapMut::from_bytes(&mut img.rgba, img.width, img.height) {
+        pm.fill_rect(rr, &p, Transform::identity(), None);
     }
 }
 pub fn fill_rect(img: &mut Image, r: Rect, c: [u8; 4]) {
@@ -396,6 +484,11 @@ fn blur(img: &mut Image, r: Rect, rad: u32) {
 }
 pub fn resized(src: &Image, w: u32, h: u32) -> Result<Image, String> {
     let mut out = Image::new(w, h)?;
+    resize_into(src, &mut out)?;
+    Ok(out)
+}
+pub fn resize_into(src: &Image, out: &mut Image) -> Result<(), String> {
+    let (w, h) = (out.width, out.height);
     let pix = tiny_skia::PixmapRef::from_bytes(&src.rgba, src.width, src.height)
         .ok_or("Invalid source")?;
     let mut pm = PixmapMut::from_bytes(&mut out.rgba, w, h).ok_or("Invalid target")?;
@@ -411,7 +504,7 @@ pub fn resized(src: &Image, w: u32, h: u32) -> Result<Image, String> {
         Transform::from_scale(w as f32 / src.width as f32, h as f32 / src.height as f32),
         None,
     );
-    Ok(out)
+    Ok(())
 }
 
 /// Select black or white text with WCAG AA contrast on an opaque swatch.

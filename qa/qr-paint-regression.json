@@ -1,0 +1,10 @@
+{
+  "external_network": false,
+  "qr_copy_exact": true,
+  "qr_copy_keeps_editor": true,
+  "qr_url_system_dispatch_exact": true,
+  "qr_open_closes_editor": true,
+  "partial_draw_matches_full_repaint": true,
+  "partial_move_matches_full_repaint": true,
+  "url_handler": "test-only, isolated Wine prefix; not browser navigation"
+}

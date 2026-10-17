@@ -12,6 +12,7 @@ pub struct Config {
     pub tool_colors: std::collections::BTreeMap<String, [u8; 4]>,
     pub search_mode: String,
     pub capture_hotkey: String,
+    pub translation_target: String,
     pub video_cursor: bool,
     pub imgur_client_id: String,
     pub save_dir: String,
@@ -40,6 +41,7 @@ impl Default for Config {
             tool_colors: Default::default(),
             search_mode: "fast".into(),
             capture_hotkey: "PrintScreen".into(),
+            translation_target: "ru".into(),
             video_cursor: true,
             imgur_client_id: String::new(),
             save_dir: std::env::var_os("USERPROFILE")
@@ -100,12 +102,15 @@ impl Config {
     }
     pub fn validate(&self) -> Result<(), String> {
         crate::hotkey::parse(&self.capture_hotkey)?;
+        if !crate::translate::TARGETS.contains(&self.translation_target.as_str()) {
+            return Err("Invalid translation target".into());
+        }
         if !["ru", "en"].contains(&self.language.as_str()) {
             return Err("Language: ru / en".into());
         }
         if !["standard", "compact", "minimal", "lightshot", "edge"].contains(&self.toolbar.as_str())
         {
-            return Err("Toolbar: compact / lightshot".into());
+            return Err("Toolbar: compact / edge".into());
         }
         if !["auto", "left", "right", "top", "bottom", "floating"]
             .contains(&self.toolbar_dock.as_str())

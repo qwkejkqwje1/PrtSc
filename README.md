@@ -1,63 +1,88 @@
-# PrtSc 0.8 — Windows x64, тестовая сборка
+# PrtSc
 
-**Готовый EXE и иконка:** https://github.com/qwkejkqwje1/PrtSc/releases/tag/v0.8.0
+**Capture. Explain. Share.** A small, native screenshot tool written in Rust.
 
-Нативный редактор снимков для Windows 10/11. Один EXE, без установки .NET, WebView или FFmpeg. Сборка не подписана. Перед обновлением **полностью завершите предыдущую версию через трей → Выход**, иначе останется работающий старый процесс.
+[Download for Windows x64](https://github.com/qwkejkqwje1/PrtSc/releases/latest) · [English](#english) · [Русский](#русский) · [简体中文](#简体中文)
 
-## Что изменено в 0.8
-- **Тигр перерисован:** широкая полосатая морда, небольшие округлые уши, узкие глаза, оскал и клыки. Значок встроен в EXE, окна и трей; ярлыки наследуют его от EXE. SVG и ICO в assets/.
-- **QR-строка теперь внутри выделения, рядом с кнопкой QR.** Нажатие на HTTP(S)-текст открывает ссылку через браузер по умолчанию и закрывает редактор после успешной передачи команды системе. Если запуск браузера завершился ошибкой, редактор остаётся открыт. «Листочки» только копируют, без закрытия. QR-строка — служебный интерфейс и не попадает в экспорт/буфер изображения. Если выделение слишком мало, строка не выводится; отдельная кнопка QR остаётся.
-- **PrintScreen записывается нажатием в настройках**, включая вариант события только отпускания клавиши. Пока поле записи сочетания в фокусе, временный клавиатурный обработчик перехватывает только PrintScreen, чтобы не запускать захват/системные Ножницы вместо записи. При уходе из поля обработчик снимается. Остальные клавиши этим обработчиком не перехватываются.
-- Запись сочетания: щёлкните поле «Клавиша снимка», нажмите нужные клавиши вместе, затем «Сохранить». Tab переводит фокус, Esc восстанавливает сохранённое значение.
+![PrtSc editor: selection, annotations and action buttons](assets/screenshots/editor.png)
 
-Сохранены доработки предыдущей версии:
-- **Карандаш первым и по умолчанию** при открытии редактора. Новый значок действительно изображает карандаш. Кнопка «Область / V» удалена; инструмент выделения используется только внутри обработки мыши.
-- **Рамка растягивается за четыре края и четыре угла**, независимо от инструмента. Пометки при этом не масштабируются; экспортируется новая область. Щелчок/перетягивание вне рамки начинает новое выделение.
-- **Цвет виден на значке каждого рисующего инструмента**, включая активный. Единственный квадрат выбора цвета сохраняет настройку отдельно для каждого инструмента. Перемещение и пипетка не окрашиваются; защитная заливка остаётся непрозрачно-чёрной.
-- **Перемещение рядом с пипеткой**, лупа поиска — первая слева в нижнем ряду.
-- **QR — отдельная кнопка**, Ctrl+Q читает/копирует QR. OCR снова запускается одним нажатием, без подменю; Ctrl+T — прямой запуск OCR.
-- Авто-QR показывает результат **внутри выделения**. Ссылка открывается кликом с закрытием редактора; отдельные «листочки» копируют полный текст и подсвечиваются зелёным, не закрывая редактор. Не-ссылка копируется также кликом по тексту. При нескольких кодах копируются все, автоматического открытия нет.
-- Авто-QR включён для новых настроек; прежнее явно сохранённое значение сохраняется. Отключается в настройках — полезно, если содержимое QR конфиденциально и не должно отображаться наблюдателям.
-- Стили **«По краям — справа и снизу» / “Edge — right and bottom”** и «Компактная — значки». Экранные команды «панель слева/справа/сверху/снизу» и ручное экранное закрепление удалены. Оба варианта привязаны к выделению. Старые имена настроек автоматически мигрируют.
-- Пиксельный индикатор размера увеличен до 22 px высотой (цифры 14 px), над левым верхним углом рамки.
-- В **настройках → Клавиша снимка** нужно нажать сочетание, например `PrintScreen`, `F9`, `Ctrl+Alt+S`, `Win+Shift+4` и т. п. Комбинации Ctrl/Alt/Shift/Win поддерживаются. Если сочетание занято, сохранение отклоняется и прежняя клавиша продолжает работать. Ctrl+Shift+R зарезервировано для записи, F12 — Windows. Обычная клавиша без модификаторов будет глобально перехватываться: лучше использовать сочетание.
-- В видео/GIF добавлен **видимый системный курсор**, включая его перемещение и точку привязки. Если системный дескриптор курсора недоступен, используется стандартная стрелка. По умолчанию включён; **«Показывать курсор в видео»** отключает его. Это не визуализация нажатий и не звуковая дорожка.
+## English
 
-## Поиск Google: ещё одна оптимизация
+Press PrintScreen, select what matters, and make your point. Draw an arrow, add a note, highlight a line or cover a private detail. Copy the result or save it without leaving the editor.
 
-Передача остаётся одноразовой страницей с изображением в одном ответе, без второго запроса картинки. Кодирование параллельно запуску браузера через обычный ShellExecuteW.
+- Pen, shapes, text, numbered steps and opaque redaction. Undo/redo and a color remembered for each tool.
+- Resize the selection by its edges. Choose an edge or compact toolbar, light or dark theme, and your own capture shortcut.
+- Search the final image with Google Lens. Read text with Windows OCR or scan a QR code locally. QR links have separate open and copy actions.
+- **Translate text:** the button just after the magnifier runs local OCR, then lets you review the text and choose a language before opening Google Translate. No API key. Long text can be copied and pasted instead of being put in a URL.
+- Pin a screenshot above other windows, or record a live area as GIF/MP4 with an optional mouse cursor. No audio; screenshot annotations are not part of the video.
 
-В 0.7 пустые предварительные соединения браузера обрабатываются **неблокирующе**: они больше не задерживают настоящий запрос на 300 ms каждое. Убрана дополнительная копия полного RGBA в RGB перед JPEG-кодированием; release-сборка оптимизируется по скорости, а не по минимальному размеру. В браузерах с Uint8Array.fromBase64 используется встроенное декодирование, для остальных — совместимый цикл.
+One portable EXE for Windows 10/11 x64. No Electron, .NET, WebView or external FFmpeg. The app interface is available in English and Russian.
 
-В локальном сравнении двух Windows EXE под Wine одно удерживаемое пустое соединение давало 271 ms в 0.6 против 1.4 ms в 0.7; восемь — 2380 ms против 2 ms. **Это искусственный тест только локального ответа, не обещание такого времени открытия Google.** На реальном ПК могут доминировать запуск браузера, антивирус, сеть и сервер Google.
+**Your choice, not a background upload.** OCR and QR decoding run on your device. Google search sends the selected image only when requested. Translation sends text only after confirmation; text links may appear in browser history. “Copy and open” keeps text out of the URL, not out of Google's processing after you paste it. Clipboard history may also retain copied text. Screenshot history is off by default.
 
-- «Быстро» — JPEG 90, длинная сторона до 2048 px. «Оригинал» — полный PNG.
-- В Google передаётся только выделение с применёнными пометками и заливкой. Нужен явный клик по лупе / Ctrl+G. Подтверждение можно включить отдельно.
-- Одноразовый адрес на 127.0.0.1 с криптографическим токеном, проверкой Host/Origin, запретом кеширования и Referrer. Изображение и HTML не записываются на диск.
-- Проверена сборка multipart в настоящем Chromium с локальной подменой всех ответов Google. **Это не проверка живой выдачи Google или скорости браузера на вашем ПК.** Запуск браузера, антивирус, сеть и сервер Google могут добавлять задержку. Внутренний endpoint Lens неофициальный и может измениться.
+**Quick keys:** Enter / Ctrl+C copy · Ctrl+S save · Ctrl+G Google · Ctrl+T OCR · Ctrl+Shift+T translate · Ctrl+Q QR · Ctrl+Shift+R record/stop.
 
-## Основные действия
+## Русский
 
-PrintScreen (или ваша клавиша) → выделить область → рисовать. Enter / Ctrl+C — копировать снимок, Ctrl+S — сохранить, Ctrl+Shift+S — сохранить как; Ctrl+Z / Ctrl+Shift+Z — отмена/повтор. P — карандаш, L — линия, A — стрелка, R — прямоугольник, O — овал, H — маркер, T — текст, D — непрозрачное скрытие, N — номер шага, I — пипетка, M — перемещение пометок. Esc — закрыть редактор.
+Нажмите PrintScreen, выделите нужное и покажите, что имеете в виду. Стрелка, короткая подпись, маркер или закрашенный личный фрагмент — затем копирование или сохранение, прямо из редактора.
 
-Кнопка камеры / Ctrl+Shift+R — настоящая запись выбранной живой области; повторное Ctrl+Shift+R или Стоп завершает файл. GIF: до 1280 px / 15 FPS. MP4 использует системный Media Foundation, без внешнего кодировщика. Видео **не включает пометки/закрашивание из редактора снимка**.
+- Карандаш, фигуры, текст, номера шагов и непрозрачное скрытие данных. Есть отмена и повтор; каждый инструмент помнит свой цвет.
+- Рамка растягивается за края. Можно выбрать компактную панель или панель по краям, светлую или тёмную тему и своё сочетание для снимка.
+- Поиск итоговой картинки в Google Lens, локальное распознавание текста и QR. У QR-ссылки отдельные действия: открыть или скопировать.
+- **Перевод текста:** кнопка сразу после лупы распознаёт выделение локально. Проверьте текст, выберите язык и откройте Google Translate. Ключ не нужен. Длинный текст можно скопировать и вставить вручную, не помещая его в адрес страницы.
+- Закрепление снимка поверх окон и запись живой области в GIF/MP4 с курсором или без него. Без звука; пометки редактора в видео не попадают.
 
-Пин закрепляет снимок поверх окон. Загрузка — выбранный Litterbox/Catbox/Imgur (ссылки публичны; не загружайте секреты). Imgur требует Client ID, не пароль. Результат загрузки имеет ссылку/копирование. Сохранение показывает уведомление с открытием папки/выделением файла; в меню есть «Показать последний сохранённый файл».
+Один переносимый EXE для Windows 10/11 x64. Без Electron, .NET, WebView и внешнего FFmpeg. Интерфейс — на русском и английском.
 
-**English:** tray → Settings → Language → English → Save; reopen Settings to see translated controls. Recognition language is controlled by installed Windows OCR language packs, not this UI-language selector.
+**Ничего не загружается в фоне.** OCR и QR работают на устройстве. Поиск отправляет выделенную картинку только по вашей команде. Перевод — текст после подтверждения; текст из ссылки может остаться в истории браузера. «Скопировать и открыть» убирает текст из URL, но после вставки его всё равно обрабатывает Google. Учтите и историю буфера обмена. История снимков по умолчанию отключена.
 
-## OCR, данные и ограничения
+**Клавиши:** Enter / Ctrl+C копировать · Ctrl+S сохранить · Ctrl+G Google · Ctrl+T OCR · Ctrl+Shift+T перевод · Ctrl+Q QR · Ctrl+Shift+R запись/стоп.
 
-OCR — локальный Windows WinRT OCR с установленными языковыми пакетами. QR — локальный quircs; сеть для распознавания не нужна. История выключена по умолчанию; включённая история хранит изображения/распознанный текст локально. Данные — `%LOCALAPPDATA%\PrtSc`, снимки — `Pictures\PrtSc`, либо выбранная папка. Диагностика не записывает содержимое QR, изображение поиска или токен.
+## 简体中文
 
-Это **preview, не сертифицированная стабильная версия**. Проверки выполнены в Linux + Wine, а не на реальном Windows-ПК. Нужна проверка смешанного DPI, нескольких мониторов, native MP4/кодеков и уведомлений Windows. Ранее Wine оставлял старый выделенный файл при повторном открытии уже существующего окна Explorer; свежий вид папки выбирал PNG/GIF правильно. Это ограничение приёмки сохраняется.
+按下 PrintScreen，框选需要的内容，再把重点说清楚。画箭头、写批注、标亮一行文字，或用不透明色块遮住私人信息，然后直接复制或保存。
 
-Внешние фотохостинги не считаются полностью принятыми: предыдущие live-запросы Litterbox/Catbox возвращали HTTP 412; Imgur без пользовательского Client ID не проверен. PrintWindow — только кооперативный дополнительный захват, **не гарантированный обход защиты Telegram**. Защищённое содержимое может оставаться чёрным. Google Keep, аудио, Linux/macOS, гарантированные <40 ms/<100 ms, <5 MB RAM и 0% CPU не заявляются реализованными/подтверждёнными.
+- 提供画笔、形状、文字、步骤编号和不透明遮盖，支持撤销与重做。每种绘图工具会记住自己的颜色。
+- 拖动边框即可调整选区。可选边缘式或紧凑式工具栏、浅色或深色主题，也能录入自己的截图快捷键。
+- 用 Google Lens 搜索编辑后的图片，在本机识别文字和二维码。二维码链接的打开与复制是两个独立操作。
+- **文字翻译：**放大镜后面的按钮会先在本机识别选区。检查文字、选择目标语言，再打开 Google 翻译，无需 API 密钥。长文本可以复制后手动粘贴，不必写进网址。
+- 将截图置顶，或把实时屏幕区域录制为 GIF/MP4，可选择是否显示鼠标指针。不录音；截图批注不会加入视频。
 
-## Сборка и тесты
+适用于 Windows 10/11 x64，单个便携 EXE，无需 Electron、.NET、WebView 或外部 FFmpeg。应用界面目前支持英语和俄语。
 
-Rust stable, Windows x64 GNU/MSVC. Для GNU нужен MinGW-w64 и windres. `cargo build --locked --release`; из Linux: `cargo build --locked --release --target x86_64-pc-windows-gnu`. EXE: `target/<target>/release/PrtSc.exe`.
+**是否上传，由你决定。** OCR 和二维码识别在本机完成。只有点击搜索，选区图片才会发送给 Google。翻译也需要确认；含文字的网址可能留在浏览器历史记录中。“复制并打开”避免把文字放入网址，但粘贴后仍会由 Google 在线处理。剪贴板历史也可能保留文字。截图历史默认关闭。
 
-`cargo test --locked --all-targets -- --test-threads=1` — 70 тестов. Последовательный режим нужен из-за общего состояния языка/макета UI. `tests/browser-handoff07.cjs` использует Playwright/Chromium, перехватывает все внешние запросы и требует **ровно один** локальный запрос. `PRTSC_TEST_BIN`, `PRTSC_CHROMIUM`, `PRTSC_QA_DIR` переопределяют пути теста.
+**快捷键：**Enter / Ctrl+C 复制 · Ctrl+S 保存 · Ctrl+G Google 搜索 · Ctrl+T 文字识别 · Ctrl+Shift+T 翻译 · Ctrl+Q 二维码 · Ctrl+Shift+R 开始/停止录制。
 
-Результаты и ограничения — docs/QA.md, docs/STATUS.md. C/JS-утилиты в tests — только тестовые приспособления, не зависимости приложения.
+## In use / В работе / 功能预览
+
+![Translation preview with editable text, target language and privacy notice](assets/screenshots/translation.png)
+
+*Translation preview shown with a sample-text fixture; this is the app's real dialog, not a translated-image mockup. / Настоящий диалог перевода с тестовым текстом. / 使用示例文字展示的真实翻译确认窗口。*
+
+![Light theme and compact toolbar](assets/screenshots/compact-light.png)
+
+![Settings: capture shortcut, output formats and cursor recording](assets/screenshots/settings.png)
+
+*Editor examples use a synthetic demonstration screen. / В редакторе показана демонстрационная сцена. / 编辑器截图使用演示画面。*
+
+## Before you run / Перед запуском / 使用前
+
+- Exit the old copy from the tray before replacing the EXE. The build is unsigned; Windows may show a reputation warning.
+- OCR/translation need installed Windows OCR languages. Translation itself needs a browser and internet access.
+- GIF was verified here; MP4 uses Windows Media Foundation and still needs real-Windows acceptance testing. Windows N may need Media Feature Pack. Wine is not a substitute for testing on Windows hardware.
+- Blur/pixelation are not secure redaction. Use an opaque block for secrets. Upload-host links are public; historical Catbox/Litterbox HTTP 412 errors remain unresolved.
+- Settings: `%LOCALAPPDATA%\PrtSc`. Default screenshots: `Pictures\PrtSc`. Source and limitations: [QA](docs/QA.md), [status](docs/STATUS.md), [changes](docs/CHANGELOG.md).
+
+## Build
+
+Rust stable + Windows x64 GNU/MSVC toolchain. GNU builds also need MinGW-w64/windres.
+
+```sh
+cargo build --locked --release
+cargo test --locked --all-targets -- --test-threads=1
+# Cross-compile from Linux:
+cargo build --locked --release --target x86_64-pc-windows-gnu
+```
+
+[MIT license](LICENSE) · [Third-party notices](THIRD-PARTY-NOTICES.txt)

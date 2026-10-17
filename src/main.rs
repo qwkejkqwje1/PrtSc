@@ -23,6 +23,11 @@ fn run() -> Result<(), String> {
             "standard"
         },
     );
+    if let Some(n) = args.iter().position(|a| a == "--translation-preview") {
+        let path = args.get(n + 1).ok_or("UTF-8 fixture path required")?;
+        let text = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
+        return platform::translation_preview(text);
+    }
     if let Some(n) = args.iter().position(|a| a == "--encoder-test") {
         return platform::encoder_test(std::path::Path::new(
             args.get(n + 1).ok_or("Output path required")?,

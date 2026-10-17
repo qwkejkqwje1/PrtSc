@@ -1,0 +1,28 @@
+{
+  "environment": "Wine, Xvfb 1280x900; not native Windows acceptance",
+  "passed": [
+    "unfinished Move -> Ctrl+Z records transaction and restores original",
+    "unfinished Resize -> Ctrl+Z restores original",
+    "unfinished Move -> Copy exports moved figure",
+    "unfinished Draw -> Save matches completed figure",
+    "small multiline text and Esc remain exportable; editor stays open",
+    "Ctrl+C while typing commits and exports text",
+    "Esc outside text closes editor",
+    "Enter with LMB held includes opaque redaction",
+    "80 completed pen strokes incrementally appended without scene rebuilds",
+    "settings hotkey capture supports actual key combinations and PrintScreen key-up"
+  ],
+  "stroke_metrics": {
+    "capture_backend": "BitBlt",
+    "capture_ms": 8.9939,
+    "clipboard_write_ms": 3.303,
+    "copy_request_to_clipboard_ms": 4.9082,
+    "dirty_pixels": 306460480,
+    "height": 436,
+    "note": "clipboard_write_ms excludes flatten/crop; copy_request_to_clipboard_ms includes them. capture_ms is null for synthetic demo/scroll. First CPU paint is not GPU presentation",
+    "paints": 1392,
+    "scene_appends": 80,
+    "scene_rebuilds": 1,
+    "width": 888
+  }
+}

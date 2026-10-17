@@ -3,6 +3,20 @@ use crate::{
     image::{Image, Rect},
     render::{self, Renderer},
 };
+/// Typed layout choice; old names are accepted only at the configuration boundary.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ToolbarStyle {
+    Edge,
+    Compact,
+}
+impl ToolbarStyle {
+    pub fn parse(value: &str) -> Self {
+        match value {
+            "edge" | "lightshot" | "minimal" => Self::Edge,
+            _ => Self::Compact,
+        }
+    }
+}
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Action {
     NewCapture,
@@ -20,6 +34,7 @@ pub enum Action {
     Copy,
     Save,
     Lens,
+    Translate,
     Ocr,
     More,
 }
@@ -49,8 +64,21 @@ impl Layout {
         Self::with_palette(w, h, selection, &COLORS)
     }
     pub fn with_palette(w: u32, h: u32, selection: Option<Rect>, colors: &[[u8; 4]; 7]) -> Self {
-        let _ = colors;
-        let split = crate::i18n::lightshot();
+        let style = if crate::i18n::lightshot() {
+            ToolbarStyle::Edge
+        } else {
+            ToolbarStyle::Compact
+        };
+        Self::for_style(w, h, selection, colors, style)
+    }
+    pub fn for_style(
+        w: u32,
+        h: u32,
+        selection: Option<Rect>,
+        _colors: &[[u8; 4]; 7],
+        style: ToolbarStyle,
+    ) -> Self {
+        let split = style == ToolbarStyle::Edge;
         let selection = selection.unwrap_or(Rect {
             x: 32,
             y: 32,
@@ -84,7 +112,7 @@ impl Layout {
                 };
             }
             let mut rail = clamp(tx, selection.y + selection.h as i32 - th as i32, tw, th);
-            let bw = 328u32.min(w.saturating_sub(8));
+            let bw = 360u32.min(w.saturating_sub(8));
             let bh = 36;
             let mut by = selection.y + selection.h as i32 + 4;
             if by + bh as i32 + 4 > h as i32 {
@@ -200,6 +228,10 @@ impl Layout {
                 Action::Lens,
                 "Поиск по картинке · Ctrl+G · передача в Google",
             ),
+            (
+                Action::Translate,
+                "Перевести текст · Ctrl+Shift+T · через браузер",
+            ),
             (Action::Copy, "Копировать · Enter / Ctrl+C"),
             (
                 Action::Save,
@@ -219,7 +251,7 @@ impl Layout {
         .into_iter()
         .enumerate()
         {
-            let step = (actions.w - 8) / 10;
+            let step = (actions.w - 8) / 11;
             add(
                 Rect {
                     x: actions.x + 4 + i as i32 * step as i32,
@@ -385,8 +417,8 @@ pub fn overlay(
             }
         }
     }
-    let mut layout = Layout::new(view.width, view.height, selection);
-    crate::dock::apply(&mut layout, view.width, view.height);
+    let layout = Layout::new(view.width, view.height, selection);
+
     if let Some(sel) = selection {
         for (image, rect) in panel_images(renderer, editor, &layout, dark, cursor, 0) {
             paste(&mut img, &image, rect.x, rect.y);
@@ -825,12 +857,75 @@ fn action_icon(img: &mut Image, r: &Renderer, action: Action, b: Rect, c: [u8; 4
             line(vec![Point::new(x, y - 10.), Point::new(x + 6., y - 4.)]);
         }
         Action::Qr => {
-            drop(line);
-            r.text(img, x - 9., y - 6., "QR", 12., c);
+            for (dx, dy) in [(-10., -10.), (3., -10.), (-10., 3.)] {
+                line(vec![
+                    Point::new(x + dx, y + dy),
+                    Point::new(x + dx + 7., y + dy),
+                    Point::new(x + dx + 7., y + dy + 7.),
+                    Point::new(x + dx, y + dy + 7.),
+                    Point::new(x + dx, y + dy),
+                ]);
+                line(vec![
+                    Point::new(x + dx + 3., y + dy + 2.5),
+                    Point::new(x + dx + 3., y + dy + 4.5),
+                ]);
+            }
+            line(vec![
+                Point::new(x + 3., y + 3.),
+                Point::new(x + 6., y + 3.),
+                Point::new(x + 6., y + 7.),
+                Point::new(x + 10., y + 7.),
+                Point::new(x + 10., y + 10.),
+            ]);
+            line(vec![
+                Point::new(x + 3., y + 8.),
+                Point::new(x + 3., y + 10.),
+            ]);
+        }
+        Action::Translate => {
+            // A + translation mark: distinct from both QR and the text tool.
+            line(vec![
+                Point::new(x - 10., y + 3.),
+                Point::new(x - 6., y - 9.),
+                Point::new(x - 2., y + 3.),
+            ]);
+            line(vec![
+                Point::new(x - 8.5, y - 1.),
+                Point::new(x - 3.5, y - 1.),
+            ]);
+            line(vec![
+                Point::new(x + 1., y - 3.),
+                Point::new(x + 10., y - 3.),
+            ]);
+            line(vec![Point::new(x + 5., y - 6.), Point::new(x + 5., y - 3.)]);
+            line(vec![
+                Point::new(x + 8., y - 3.),
+                Point::new(x + 6., y + 3.),
+                Point::new(x + 1., y + 8.),
+            ]);
+            line(vec![
+                Point::new(x + 2., y + 1.),
+                Point::new(x + 5., y + 5.),
+                Point::new(x + 11., y + 9.),
+            ]);
         }
         Action::Ocr => {
-            drop(line);
-            r.text(img, x - 13., y - 6., "OCR", 12., c);
+            for (dx, dy, sx, sy) in [
+                (-10., -10., 1., 1.),
+                (10., -10., -1., 1.),
+                (-10., 10., 1., -1.),
+                (10., 10., -1., -1.),
+            ] {
+                line(vec![
+                    Point::new(x + dx, y + dy + 5. * sy),
+                    Point::new(x + dx, y + dy),
+                    Point::new(x + dx + 5. * sx, y + dy),
+                ]);
+            }
+            // Scan lines, not a T: OCR must not look like the text annotation tool.
+            line(vec![Point::new(x - 5., y - 5.), Point::new(x + 5., y - 5.)]);
+            line(vec![Point::new(x - 5., y), Point::new(x + 5., y)]);
+            line(vec![Point::new(x - 5., y + 5.), Point::new(x + 2., y + 5.)]);
         }
         Action::More => {
             drop(line);
@@ -1261,16 +1356,8 @@ pub fn qr_banner(renderer: &Renderer, text: &str, rect: Rect, copied: bool) -> I
         [24, 31, 40, 255],
     );
     let url = crate::links::http_url(text).is_some();
-    let mut label = format!("QR: {text}");
     let limit = rect.w.saturating_sub(42) as f32;
-    let mut short = false;
-    while !label.is_empty() && renderer.text_width(&label, 12.) > limit {
-        label.pop();
-        short = true;
-    }
-    if short {
-        label.push('…');
-    }
+    let label = renderer.elide(&format!("QR: {text}"), 12., limit);
     let color = if url {
         [107, 192, 255, 255]
     } else {

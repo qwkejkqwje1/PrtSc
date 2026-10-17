@@ -1,0 +1,4 @@
+win_gui_probe key 65 => win_final_probe hold 300 300 460 410 => win_final_probe refresh => win_final_probe up => win_gui_probe key 77 => win_final_probe hold 380 355 420 395 => win_final_probe refresh => win_gui_probe key 27 => win_final_probe command 13 => url_sink => win_final_probe command 10 => win_gui_probe drag 100 90 780 585 => win_actions_probe click 762 569 => win_actions_probe cliptext => http://127.0.0.1:19876/qr-test
+win_final_probe state => overlay=1 settings=0 main=1
+win_actions_probe click 450 569 => win_final_probe state => overlay=0 settings=0 main=1
+win_final_probe command 13 => 

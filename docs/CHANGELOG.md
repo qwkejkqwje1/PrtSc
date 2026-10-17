@@ -1,3 +1,29 @@
+# PrtSc 1.1.0
+
+- Added keyless browser translation after local OCR, with an editable preview, nine target languages, explicit confirmation and long-text manual-paste fallback. Ctrl+Shift+T; separate action immediately after the magnifier.
+- OCR now has a scan-line icon distinct from the Text tool. Preserved the user-provided application icon.
+- Replaced README with English, Russian and Simplified Chinese descriptions and current screenshots. Refreshed About copy.
+- Added URL policy/config/layout tests and native preview/dispatch checks. No new runtime dependency.
+- Google Lens handoff is unchanged and regression-tested with intercepted Chromium requests.
+
+---
+
+# 1.0.0 — final feature scope
+
+- Commit active draw/move/resize before export; undo-safe gesture completion.
+- Text metric bounds, multiline/14px live text, visible caret/box, Esc commits without closing, Ctrl+C/S exports while typing.
+- Multiply highlighter preserves black text; Blur/Pixelate reachable through More and B/X.
+- Reuse DIB/back/capture buffers; remove dim frame; append annotation cache, clipped damage, bounded glyph cache.
+- Reuse NV12/quantizer scratch; direct BGRA conversion; cache MF factories; continuous sample durations with lookahead and final flush.
+- Common Controls v6 and white labels/checkboxes; vector OCR/QR icons.
+- User-provided eight-resolution ICO embedded unchanged, old generated tiger artwork removed.
+- Extract native dialogs; shared text/damage/clock modules; typed explicit native toolbar; stateless legacy dock compatibility.
+- Correct product/manifest/User-Agent version. Preserve old settings aliases and security properties.
+- 85 tests on Linux and Windows test EXEs under Wine plus GUI/GIF/QR/intercepted-browser checks. Native Windows acceptance limits documented.
+
+---
+## Historical changes
+
 # 0.8.0
 - Redrawn broad-faced snarling tiger with rounded ears, clear stripes, narrowed eyes and long fangs.
 - QR result inside selected region near QR action. URL click opens via default browser and closes editor on successful system dispatch; copy button keeps editor open. Row omitted in too-small regions; UI row never exported.

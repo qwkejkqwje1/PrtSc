@@ -1,12 +1,17 @@
+#[path = "win_dialogs.rs"]
+mod dialogs;
 #[path = "win_native.rs"]
 mod native;
 #[path = "win_paint.rs"]
 mod paint;
+use dialogs::{child, history_proc, settings_proc, text_proc};
+#[path = "win_translate.rs"]
+mod translate_ui;
 #[path = "win_video.rs"]
 mod video;
 use luma_shot::{
     config::Config,
-    editor::{Annotation, Editor, Point, Tool, TOOLS},
+    editor::{Annotation, Editor, Point, Tool},
     history,
     image::{Image, Rect},
     render::Renderer,
@@ -51,12 +56,15 @@ const FOLDER: u32 = 118;
 const COMPAT: u32 = 119;
 const REVEAL: u32 = 125;
 const OCR: u32 = 105;
+const TRANSLATE: u32 = 128;
 const PIN: u32 = 106;
 const PRINT: u32 = 107;
 const QR: u32 = 111;
 const SCROLL: u32 = 112;
 const RGB: u32 = 113;
 const HEX: u32 = 114;
+const BLUR_TOOL: u32 = 126;
+const PIXELATE_TOOL: u32 = 127;
 #[derive(Clone)]
 enum Drag {
     None,
@@ -81,6 +89,8 @@ enum Drag {
 struct Session {
     cache: Option<paint::FrameCache>,
     scene_builds: u64,
+    scene_appends: u64,
+    dirty_pixels: u64,
     paint_count: u64,
     present_count: u64,
     qr_values: Vec<String>,
@@ -104,8 +114,24 @@ struct Session {
     backend: &'static str,
     painted: bool,
 }
+impl Session {
+    fn live_damage(&self) -> Option<Rect> {
+        let a = match &self.drag {
+            Drag::Draw => self.editor.draft.as_ref(),
+            Drag::Move { index, .. } | Drag::Resize { index, .. } => {
+                self.editor.annotations.get(*index)
+            }
+            _ => None,
+        }?;
+        Some(
+            luma_shot::damage::expand(self.view.rect(self.renderer.bounds(a)), 12)
+                .clamp(self.view.width, self.view.height),
+        )
+    }
+}
 enum Work {
     Saved(PathBuf),
+    Translation(String),
     Text {
         title: String,
         text: String,
@@ -176,6 +202,7 @@ struct App {
     pins: HashMap<isize, Pin>,
     settings: Option<SettingsState>,
     text: Option<TextState>,
+    translation: Option<translate_ui::TranslationState>,
     history: Option<HistoryState>,
     icon: HICON,
     window_icon: HICON,
@@ -212,8 +239,20 @@ pub fn capture_file(path: &Path) -> Result<(), String> {
     }
 }
 pub fn run(demo: bool) -> Result<(), String> {
+    run_mode(demo, None)
+}
+/// Test fixture: shows the real privacy/translation UI without requiring WinRT OCR.
+pub fn translation_preview(text: String) -> Result<(), String> {
+    run_mode(true, Some(text))
+}
+fn run_mode(demo: bool, preview: Option<String>) -> Result<(), String> {
     unsafe {
         SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+        let controls = INITCOMMONCONTROLSEX {
+            dwSize: size_of::<INITCOMMONCONTROLSEX>() as u32,
+            dwICC: ICC_STANDARD_CLASSES | ICC_LINK_CLASS,
+        };
+        InitCommonControlsEx(&controls);
         let mutex = CreateMutexW(null(), 0, wide("Local\\PrtSc.Instance.0.2").as_ptr());
         if mutex.is_null() {
             return Err(native::last("CreateMutex"));
@@ -229,13 +268,14 @@ pub fn run(demo: bool) -> Result<(), String> {
         let instance = GetModuleHandleW(null());
         let window_icon = native::app_icon(32)?;
         let small_icon = native::app_icon(GetSystemMetrics(SM_CXSMICON).max(16))?;
-        let classes: [(&str, WNDPROC, u32); 7] = [
+        let classes: [(&str, WNDPROC, u32); 8] = [
             ("LumaRecord", Some(record_proc), 0),
             ("LumaMain", Some(main_proc), 0),
             ("LumaOverlay", Some(overlay_proc), CS_DBLCLKS),
             ("LumaPin", Some(pin_proc), CS_DBLCLKS),
             ("LumaSettings", Some(settings_proc), 0),
             ("LumaText", Some(text_proc), 0),
+            ("LumaTranslate", Some(translate_ui::translation_proc), 0),
             ("LumaHistory", Some(history_proc), CS_DBLCLKS),
         ];
         for (name, proc, style) in classes {
@@ -275,6 +315,7 @@ pub fn run(demo: bool) -> Result<(), String> {
             pins: HashMap::new(),
             settings: None,
             text: None,
+            translation: None,
             history: None,
             icon: small_icon,
             window_icon,
@@ -283,7 +324,7 @@ pub fn run(demo: bool) -> Result<(), String> {
             hotkey_id: 1,
         });
         luma_shot::i18n::configure(&state.config.language, &state.config.toolbar);
-        luma_shot::dock::configure(&state.config.toolbar_dock);
+
         let ptr = &mut *state as *mut App;
         state.main = CreateWindowExW(
             0,
@@ -322,11 +363,15 @@ pub fn run(demo: bool) -> Result<(), String> {
         if demo {
             state.start(true)?;
         }
+        if let Some(text) = preview {
+            state.show_translation(&text)?;
+        }
         let mut msg: MSG = zeroed();
         while GetMessageW(&mut msg, null_mut(), 0, 0) > 0 {
             let dialogs = [
                 state.settings.as_ref().map(|s| s.hwnd),
                 state.text.as_ref().map(|s| s.hwnd),
+                state.translation.as_ref().map(|s| s.hwnd),
                 state.history.as_ref().map(|s| s.hwnd),
             ];
             if dialogs
@@ -412,6 +457,19 @@ impl App {
             }
         }
     }
+    fn invalidate_region(&self, r: Rect) {
+        unsafe {
+            if !self.overlay.is_null() && r.valid() {
+                let r = RECT {
+                    left: r.x,
+                    top: r.y,
+                    right: r.x + r.w as i32,
+                    bottom: r.y + r.h as i32,
+                };
+                InvalidateRect(self.overlay, &r, 0);
+            }
+        }
+    }
     fn fail(&mut self, e: &str) {
         if let Some(s) = &mut self.session {
             s.status = e.chars().take(110).collect();
@@ -421,6 +479,12 @@ impl App {
         }
     }
     fn start(&mut self, demo: bool) -> Result<(), String> {
+        if let Some(t) = &self.translation {
+            unsafe {
+                SetForegroundWindow(t.hwnd);
+            }
+            return Ok(());
+        }
         if let Some(r) = &self.recording {
             unsafe {
                 SetForegroundWindow(r.hwnd);
@@ -460,6 +524,8 @@ impl App {
             self.session = Some(Session {
                 cache: None,
                 scene_builds: 0,
+                scene_appends: 0,
+                dirty_pixels: 0,
                 paint_count: 0,
                 present_count: 0,
                 qr_values: vec![],
@@ -471,7 +537,7 @@ impl App {
                 renderer: if demo {
                     Renderer::new()
                 } else {
-                    Renderer { font: None }
+                    Renderer::unloaded()
                 },
                 view,
                 screen,
@@ -533,6 +599,7 @@ impl App {
         if let Some(s) = &mut self.session {
             if s.typing {
                 s.typing = false;
+                s.pending_surrogate = 0;
                 if let Some(a) = s.editor.draft.take() {
                     if !a.text.is_empty() {
                         if let Some((index, before)) = s.text_replace.take() {
@@ -547,7 +614,39 @@ impl App {
             }
         }
     }
+    fn finish_gesture(&mut self) -> bool {
+        let mut changed = false;
+        if let Some(s) = &mut self.session {
+            changed = !matches!(s.drag, Drag::None);
+            match std::mem::replace(&mut s.drag, Drag::None) {
+                Drag::Draw => {
+                    if let Some(d) = s.editor.draft.take() {
+                        if d.rect().w > 1 || d.rect().h > 1 {
+                            s.editor.add(d);
+                        }
+                    }
+                }
+                Drag::Move { index, before, .. } | Drag::Resize { index, before, .. } => {
+                    if let Some(after) = s.editor.annotations.get(index).cloned() {
+                        s.editor.replace(index, before, after);
+                    }
+                }
+                _ => {}
+            }
+        }
+        // Clear the transaction BEFORE ReleaseCapture's synchronous notification.
+        unsafe {
+            if !self.overlay.is_null() && GetCapture() == self.overlay {
+                ReleaseCapture();
+            }
+        }
+        if changed {
+            self.invalidate();
+        }
+        changed
+    }
     fn final_image(&mut self) -> Result<Image, String> {
+        self.finish_gesture();
         self.commit_text();
         let s = self.session.as_ref().ok_or("Нет открытого снимка")?;
         let rect = s.editor.selection().ok_or("Сначала выделите область")?;
@@ -598,6 +697,11 @@ impl App {
             }
             match job.result {
                 Err(e) => self.fail(&e),
+                Ok(Work::Translation(text)) => {
+                    if let Err(e) = self.show_translation(&text) {
+                        self.fail(&e);
+                    }
+                }
                 Ok(Work::Saved(p)) => {
                     self.close_editor();
                     self.notify_file(&p);
@@ -619,6 +723,8 @@ impl App {
                         self.session = Some(Session {
                             cache: None,
                             scene_builds: 0,
+                            scene_appends: 0,
+                            dirty_pixels: 0,
                             paint_count: 0,
                             present_count: 0,
                             qr_values: vec![],
@@ -728,6 +834,9 @@ impl App {
         self.invalidate();
     }
     fn action(&mut self, a: Action) {
+        if a != Action::Cancel {
+            self.finish_gesture();
+        }
         match a {
             Action::Tool(t) => {
                 self.commit_text();
@@ -798,6 +907,7 @@ impl App {
                 }
             }
             Action::Ocr => self.command(OCR),
+            Action::Translate => self.command(TRANSLATE),
             Action::More => self.menu(true),
         }
         if matches!(
@@ -852,6 +962,14 @@ impl App {
             return;
         }
         match id {
+            BLUR_TOOL | PIXELATE_TOOL => {
+                self.action(Action::Tool(if id == BLUR_TOOL {
+                    Tool::Blur
+                } else {
+                    Tool::Pixelate
+                }));
+                return;
+            }
             LICENSES => {
                 self.show_text(
                     "PrtSc · Open-source licenses",
@@ -902,11 +1020,11 @@ impl App {
             }
             ABOUT => {
                 let help = if luma_shot::i18n::english() {
-                    "PrintScreen — capture · drag to select · Alt+click — window\r\nEnter / Ctrl+C — copy · Ctrl+S — save · Ctrl+Shift+S — Save as\r\nCtrl+G — Google · Ctrl+T — offline OCR · Ctrl+Q — read QR\r\nCtrl+Z / Ctrl+Shift+Z — undo / redo\r\nDrag an edge to resize · click outside for a new area · M — move annotations · P — pen · L — line\r\nA — arrow · R — rectangle · O — oval · H — highlight\r\nT — text · D — opaque redaction · N — numbered step · I — color picker\r\nClick the single color swatch; each drawing tool remembers its color. Hover icons for labels.\r\nVideo camera / Ctrl+Shift+R — record selected live area. Stop with Ctrl+Shift+R or Stop.\r\nFormat, FPS and output folder are in Settings. GIF: up to 1280px / 15 FPS. No audio.\r\nCursor recording is optional in Settings. Video does NOT include screenshot annotations/redactions.\r\nUpload arrow — selected host; links are public. Google button sends the final selection.\r\nQR is local; links are never opened automatically. OCR uses installed Windows OCR languages.\r\nOpaque redaction removes covered pixels in exports; undo and the original remain in the editor.\r\nExperimental PrintWindow is cooperative capture, NOT a guaranteed Telegram protection bypass.\r\nPerformance targets need validation on real Windows hardware."
+                    "PrtSc 1.1\r\nCapture. Explain. Share.\r\nNative Rust. No clutter. Yours to keep.\r\n\r\nPrintScreen — capture · drag to select · Alt+click — window\r\nEnter / Ctrl+C — copy · Ctrl+S — save · Ctrl+Shift+S — Save as\r\nCtrl+G — Google · Ctrl+T — offline OCR · Ctrl+Q — read QR\r\nCtrl+Shift+T — translate recognized text in browser (preview first)\r\nCtrl+Z / Ctrl+Shift+Z — undo / redo\r\nDrag an edge to resize · click outside for a new area · M — move annotations · P — pen · L — line\r\nA — arrow · R — rectangle · O — oval · H — highlight\r\nB — blur · X — pixelate (not for secrets)\r\nT — text · D — opaque redaction · N — numbered step · I — color picker\r\nClick the single color swatch; each drawing tool remembers its color. Hover icons for labels.\r\nVideo camera / Ctrl+Shift+R — record selected live area. Stop with Ctrl+Shift+R or Stop.\r\nFormat, FPS and output folder are in Settings. GIF: up to 1280px / 15 FPS. No audio.\r\nCursor recording is optional in Settings. Video does NOT include screenshot annotations/redactions.\r\nUpload arrow — selected host; links are public. Google button sends the final selection.\r\nQR is local; links are never opened automatically. OCR uses installed Windows OCR languages.\r\nOpaque redaction removes covered pixels in exports; undo and the original remain in the editor.\r\nExperimental PrintWindow is cooperative capture, NOT a guaranteed Telegram protection bypass.\r\nPerformance targets need validation on real Windows hardware."
                 } else {
-                    "PrintScreen — снимок · мышь — выделение · Alt+щелчок — окно\r\nEnter / Ctrl+C — копировать · Ctrl+S — сохранить · Ctrl+Shift+S — сохранить как\r\nCtrl+G — Google · Ctrl+T — OCR офлайн · Ctrl+Q — прочитать QR\r\nCtrl+Z / Ctrl+Shift+Z — отменить / повторить\r\nКрай рамки — размер · вне рамки — новая область · M — перемещение пометок · P — карандаш · L — линия\r\nA — стрелка · R — прямоугольник · O — овал · H — маркер\r\nT — текст · D — скрыть данные · N — номер шага · I — пипетка\r\nНажмите на цвет: он сохраняется отдельно для каждого инструмента. Наведите на значок для пояснения.\r\nКинокамера / Ctrl+Shift+R — запись живой области. Остановка: Ctrl+Shift+R или Стоп.\r\nФормат, частота и папка — в настройках. GIF: до 1280 пикселей / 15 FPS. Без звука.\r\nКурсор в записи отключается в настройках. Видеозапись НЕ включает пометки и закрашивание из редактора снимка.\r\nСтрелка загрузки — выбранный фотохостинг; ссылки публичные. Google отправляет итоговое выделение.\r\nQR читается локально, без открытия ссылок. OCR использует языки Windows OCR.\r\nНепрозрачная заливка удаляет закрытые пиксели при экспорте; исходник и отмена остаются в редакторе.\r\nЭкспериментальный PrintWindow — не гарантированный обход защиты Telegram.\r\nЦелевые задержки и память требуют проверки на реальной Windows."
+                    "PrtSc 1.1\r\nВыделил. Объяснил. Отправил.\r\nМастер скриншотов. Нативный Rust. Без лишнего. Навсегда.\r\n\r\nPrintScreen — снимок · мышь — выделение · Alt+щелчок — окно\r\nEnter / Ctrl+C — копировать · Ctrl+S — сохранить · Ctrl+Shift+S — сохранить как\r\nCtrl+G — Google · Ctrl+T — OCR офлайн · Ctrl+Q — прочитать QR\r\nCtrl+Shift+T — перевод текста в браузере (сначала предпросмотр)\r\nCtrl+Z / Ctrl+Shift+Z — отменить / повторить\r\nКрай рамки — размер · вне рамки — новая область · M — перемещение пометок · P — карандаш · L — линия\r\nA — стрелка · R — прямоугольник · O — овал · H — маркер\r\nB — размытие · X — пикселизация (не для секретов)\r\nT — текст · D — скрыть данные · N — номер шага · I — пипетка\r\nНажмите на цвет: он сохраняется отдельно для каждого инструмента. Наведите на значок для пояснения.\r\nКинокамера / Ctrl+Shift+R — запись живой области. Остановка: Ctrl+Shift+R или Стоп.\r\nФормат, частота и папка — в настройках. GIF: до 1280 пикселей / 15 FPS. Без звука.\r\nКурсор в записи отключается в настройках. Видеозапись НЕ включает пометки и закрашивание из редактора снимка.\r\nСтрелка загрузки — выбранный фотохостинг; ссылки публичные. Google отправляет итоговое выделение.\r\nQR читается локально; ссылки открываются только по вашему клику. OCR использует языки Windows OCR.\r\nНепрозрачная заливка удаляет закрытые пиксели при экспорте; исходник и отмена остаются в редакторе.\r\nЭкспериментальный PrintWindow — не гарантированный обход защиты Telegram.\r\nЦелевые задержки и память требуют проверки на реальной Windows."
                 };
-                self.show_text(luma_shot::i18n::tr("PrtSc 0.8 · Справка"), help, None);
+                self.show_text(luma_shot::i18n::tr("PrtSc 1.1 · Справка"), help, None);
                 return;
             }
             _ => {}
@@ -938,7 +1056,7 @@ impl App {
                         );
                         let _ = std::fs::create_dir_all(util::data_dir());
                         if let Some(s) = &self.session {
-                            let metrics = serde_json::json!({"capture_backend":s.backend,"capture_ms":if s.backend=="BitBlt"{serde_json::json!(s.capture_ms)}else{serde_json::Value::Null},"clipboard_write_ms":ms,"copy_request_to_clipboard_ms":action_started.elapsed().as_secs_f64()*1000.,"note":"clipboard_write_ms excludes flatten/crop; copy_request_to_clipboard_ms includes them. capture_ms is null for synthetic demo/scroll. First CPU paint is not GPU presentation","width":image.width,"height":image.height,"scene_rebuilds":s.scene_builds,"paints":s.paint_count});
+                            let metrics = serde_json::json!({"capture_backend":s.backend,"capture_ms":if s.backend=="BitBlt"{serde_json::json!(s.capture_ms)}else{serde_json::Value::Null},"clipboard_write_ms":ms,"copy_request_to_clipboard_ms":action_started.elapsed().as_secs_f64()*1000.,"note":"clipboard_write_ms excludes flatten/crop; copy_request_to_clipboard_ms includes them. capture_ms is null for synthetic demo/scroll. First CPU paint is not GPU presentation","width":image.width,"height":image.height,"scene_rebuilds":s.scene_builds,"scene_appends":s.scene_appends,"dirty_pixels":s.dirty_pixels,"paints":s.paint_count});
                             let _ = std::fs::write(
                                 util::data_dir().join("last-metrics.json"),
                                 serde_json::to_vec_pretty(&metrics).unwrap(),
@@ -1026,6 +1144,23 @@ impl App {
                 let _ = std::fs::write(
                     util::data_dir().join("last-browser-launch.json"),
                     metrics.to_string(),
+                );
+            }
+            TRANSLATE => {
+                // Only the flattened/cropped image reaches OCR. Never the hidden source.
+                // Keep the editor until OCR succeeds; neither text nor pixels leave here.
+                self.spawn(
+                    "Распознаём текст для перевода",
+                    move || {
+                        let text = native::ocr(&image)?;
+                        if text.trim().is_empty() {
+                            return Err(luma_shot::i18n::tr(
+                                "Текст не найден. Попробуйте выделить область точнее.",
+                            )
+                            .into());
+                        }
+                        Ok(Work::Translation(text))
+                    },
                 );
             }
             OCR => {
@@ -1176,8 +1311,11 @@ impl App {
                     (FOLDER, "Открыть папку снимков"),
                     (REVEAL, "Показать последний сохранённый файл"),
                     (SAVE_AS, "Сохранить как…"),
+                    (BLUR_TOOL, "Размытие · B · не для секретов"),
+                    (PIXELATE_TOOL, "Пикселизация · X · не для секретов"),
                     (PIN, "Закрепить поверх окон"),
                     (QR, "Прочитать QR локально"),
+                    (TRANSLATE, "Перевести текст · Ctrl+Shift+T · через браузер"),
                     (SCROLL, "Длинный снимок — экспериментально"),
                     (PRINT, "Печать…"),
                     (HEX, "Копировать HEX под курсором"),
@@ -1460,7 +1598,14 @@ unsafe extern "system" fn overlay_proc(hwnd: HWND, msg: u32, w: WPARAM, l: LPARA
             let dc = BeginPaint(hwnd, &mut ps);
             if let Some(s) = &mut a.session {
                 let dark = dark_theme(&a.config);
-                if let Err(e) = paint::paint(s, dc, ps.rcPaint, dark, &a.config.palette) {
+                if let Err(e) = paint::paint(
+                    s,
+                    dc,
+                    ps.rcPaint,
+                    dark,
+                    &a.config.palette,
+                    ui::ToolbarStyle::parse(&a.config.toolbar),
+                ) {
                     s.status = e;
                 }
                 if !s.painted {
@@ -1647,6 +1792,12 @@ unsafe extern "system" fn overlay_proc(hwnd: HWND, msg: u32, w: WPARAM, l: LPARA
         }
         WM_MOUSEMOVE => {
             let (x, y) = coords(l);
+            let damage_before = a.session.as_ref().and_then(Session::live_damage);
+            let hover_only = a
+                .session
+                .as_ref()
+                .map(|s| matches!(s.drag, Drag::None) && !alt())
+                .unwrap_or(false);
             if let Some(s) = &mut a.session {
                 let old = s.cursor;
                 let hover = |xy: (i32, i32)| s.layout.as_ref().and_then(|l| l.hit(xy.0, xy.1));
@@ -1778,30 +1929,33 @@ unsafe extern "system" fn overlay_proc(hwnd: HWND, msg: u32, w: WPARAM, l: LPARA
                     _ => {}
                 }
             }
-            a.invalidate();
+            if let (Some(before), Some(after)) = (
+                damage_before,
+                a.session.as_ref().and_then(Session::live_damage),
+            ) {
+                a.invalidate_region(luma_shot::damage::union(before, after));
+            } else if hover_only {
+                if let Some(s) = &a.session {
+                    if let Some(l) = &s.layout {
+                        let mut r = Rect::default();
+                        for surface in &l.surfaces {
+                            r = luma_shot::damage::union(
+                                r,
+                                luma_shot::damage::expand(*surface, 184),
+                            );
+                        }
+                        a.invalidate_region(r.clamp(s.view.width, s.view.height));
+                    } else {
+                        a.invalidate();
+                    }
+                }
+            } else {
+                a.invalidate();
+            }
             return 0;
         }
         WM_LBUTTONUP => {
-            let mut changed = false;
-            if let Some(s) = &mut a.session {
-                changed = !matches!(s.drag, Drag::None);
-                match std::mem::replace(&mut s.drag, Drag::None) {
-                    Drag::Draw => {
-                        if let Some(d) = s.editor.draft.take() {
-                            if d.rect().w > 1 || d.rect().h > 1 {
-                                s.editor.add(d);
-                            }
-                        }
-                    }
-                    Drag::Move { index, before, .. } | Drag::Resize { index, before, .. } => {
-                        let after = s.editor.annotations[index].clone();
-                        s.editor.replace(index, before, after);
-                    }
-                    _ => {}
-                }
-            }
-            ReleaseCapture();
-            if changed {
+            if a.finish_gesture() {
                 a.schedule_qr();
             }
             a.invalidate();
@@ -1886,10 +2040,17 @@ unsafe extern "system" fn overlay_proc(hwnd: HWND, msg: u32, w: WPARAM, l: LPARA
         WM_KEYDOWN | WM_SYSKEYDOWN => {
             let key = w as u32;
             if key == VK_ESCAPE as u32 {
-                a.close_editor();
+                if a.session.as_ref().map(|s| s.typing).unwrap_or(false) {
+                    a.commit_text();
+                    a.invalidate();
+                } else {
+                    a.close_editor();
+                }
                 return 0;
             }
-            if a.session.as_ref().map(|s| s.typing).unwrap_or(false) {
+            if a.session.as_ref().map(|s| s.typing).unwrap_or(false)
+                && !(ctrl() && [67, 83, 71, 84].contains(&key))
+            {
                 if key == VK_RETURN as u32 && !shift() {
                     a.commit_text();
                     a.invalidate();
@@ -1904,7 +2065,7 @@ unsafe extern "system" fn overlay_proc(hwnd: HWND, msg: u32, w: WPARAM, l: LPARA
                     81 => a.command(QR),
                     82 if shift() => a.command(RECORD),
 
-                    84 => a.command(OCR),
+                    84 => a.command(if shift() { TRANSLATE } else { OCR }),
                     90 => a.action(if shift() { Action::Redo } else { Action::Undo }),
                     89 => a.action(Action::Redo),
                     65 => {
@@ -1952,11 +2113,8 @@ unsafe extern "system" fn overlay_proc(hwnd: HWND, msg: u32, w: WPARAM, l: LPARA
                         }
                     }
                     _ => {
-                        if let Some(t) = TOOLS
-                            .iter()
-                            .find(|t| t.key().as_bytes().first().copied() == Some(key as u8))
-                        {
-                            a.action(Action::Tool(*t))
+                        if let Some(t) = luma_shot::editor::tool_for_key(key as u8) {
+                            a.action(Action::Tool(t))
                         }
                     }
                 }
@@ -2079,1252 +2237,6 @@ unsafe extern "system" fn pin_proc(hwnd: HWND, msg: u32, w: WPARAM, l: LPARAM) -
             WM_KEYDOWN if w == VK_ESCAPE as usize => {
                 a.pins.remove(&(hwnd as isize));
                 DestroyWindow(hwnd);
-                return 0;
-            }
-            _ => {}
-        }
-    }
-    DefWindowProcW(hwnd, msg, w, l)
-}
-static CONTROL_FONT: std::sync::OnceLock<usize> = std::sync::OnceLock::new();
-
-unsafe fn child(
-    parent: HWND,
-    class: &str,
-    text: &str,
-    style: u32,
-    x: i32,
-    y: i32,
-    w: i32,
-    h: i32,
-    id: usize,
-) -> HWND {
-    let c = CreateWindowExW(
-        0,
-        wide(class).as_ptr(),
-        wide(if class == "EDIT" {
-            text
-        } else {
-            luma_shot::i18n::tr(text)
-        })
-        .as_ptr(),
-        WS_CHILD | WS_VISIBLE | style,
-        x,
-        y,
-        w,
-        h,
-        parent,
-        id as HMENU,
-        GetModuleHandleW(null()),
-        null(),
-    );
-    SendMessageW(
-        c,
-        WM_SETFONT,
-        *CONTROL_FONT.get_or_init(|| {
-            CreateFontW(
-                -15,
-                0,
-                0,
-                0,
-                400,
-                0,
-                0,
-                0,
-                1,
-                0,
-                0,
-                5,
-                0,
-                wide("Segoe UI").as_ptr(),
-            ) as usize
-        }),
-        1,
-    );
-    c
-}
-unsafe fn value(hwnd: HWND) -> String {
-    let len = GetWindowTextLengthW(hwnd).max(0) as usize;
-    let mut b = vec![0u16; len + 1];
-    GetWindowTextW(hwnd, b.as_mut_ptr(), b.len() as i32);
-    String::from_utf16_lossy(&b[..len])
-}
-unsafe fn setting_edit(
-    hwnd: HWND,
-    label: &str,
-    x: i32,
-    y: i32,
-    w: i32,
-    id: usize,
-    text: &str,
-) -> HWND {
-    child(hwnd, "STATIC", label, 0, x, y, w, 22, 0);
-    child(
-        hwnd,
-        "EDIT",
-        text,
-        WS_BORDER | WS_TABSTOP | ES_AUTOHSCROLL as u32,
-        x,
-        y + 26,
-        w,
-        28,
-        id,
-    )
-}
-unsafe fn setting_combo(
-    hwnd: HWND,
-    label: &str,
-    x: i32,
-    y: i32,
-    w: i32,
-    id: usize,
-    items: &[&str],
-    index: usize,
-) -> HWND {
-    child(hwnd, "STATIC", label, 0, x, y, w, 22, 0);
-    let h = child(
-        hwnd,
-        "COMBOBOX",
-        "",
-        WS_TABSTOP | WS_VSCROLL | CBS_DROPDOWNLIST as u32,
-        x,
-        y + 26,
-        w,
-        200,
-        id,
-    );
-    for text in items {
-        SendMessageW(
-            h,
-            CB_ADDSTRING,
-            0,
-            wide(luma_shot::i18n::tr(text)).as_ptr() as isize,
-        );
-    }
-    SendMessageW(h, CB_SETCURSEL, index, 0);
-    h
-}
-unsafe fn setting_check(
-    hwnd: HWND,
-    label: &str,
-    x: i32,
-    y: i32,
-    w: i32,
-    id: usize,
-    checked: bool,
-) -> HWND {
-    let h = child(
-        hwnd,
-        "BUTTON",
-        label,
-        BS_AUTOCHECKBOX as u32 | WS_TABSTOP,
-        x,
-        y,
-        w,
-        28,
-        id,
-    );
-    SendMessageW(
-        h,
-        BM_SETCHECK,
-        if checked { BST_CHECKED } else { BST_UNCHECKED } as usize,
-        0,
-    );
-    h
-}
-impl App {
-    fn show_settings(&mut self) {
-        unsafe {
-            if let Some(s) = &self.settings {
-                SetForegroundWindow(s.hwnd);
-                return;
-            }
-            if !self.overlay.is_null() {
-                ShowWindow(self.overlay, SW_HIDE);
-            }
-            let hwnd = CreateWindowExW(
-                WS_EX_APPWINDOW,
-                wide("LumaSettings").as_ptr(),
-                wide(luma_shot::i18n::tr("PrtSc · Настройки")).as_ptr(),
-                WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU,
-                CW_USEDEFAULT,
-                CW_USEDEFAULT,
-                820,
-                800,
-                null_mut(),
-                null_mut(),
-                GetModuleHandleW(null()),
-                self as *mut _ as _,
-            );
-            let c = &self.config;
-            let mut fields = vec![];
-            child(
-                hwnd,
-                "STATIC",
-                "PrtSc · Settings / Настройки",
-                0,
-                20,
-                16,
-                770,
-                25,
-                0,
-            );
-            let language = setting_combo(
-                hwnd,
-                "Язык / Language",
-                20,
-                54,
-                350,
-                106,
-                &["Русский", "English"],
-                if c.language == "en" { 1 } else { 0 },
-            );
-            let theme = setting_combo(
-                hwnd,
-                "Тема панели",
-                20,
-                120,
-                350,
-                100,
-                &["Тёмная", "Светлая", "Как в Windows"],
-                match c.theme.as_str() {
-                    "light" => 1,
-                    "system" => 2,
-                    _ => 0,
-                },
-            );
-            let toolbar = setting_combo(
-                hwnd,
-                "Вид панели",
-                20,
-                186,
-                350,
-                107,
-                &["Компактная — значки", "По краям — справа и снизу"],
-                if ["edge", "lightshot"].contains(&c.toolbar.as_str()) {
-                    1
-                } else {
-                    0
-                },
-            );
-            child(hwnd, "STATIC", "Папка снимков", 0, 20, 252, 350, 22, 0);
-            let dir = child(
-                hwnd,
-                "EDIT",
-                &c.save_dir,
-                WS_BORDER | WS_TABSTOP | ES_AUTOHSCROLL as u32,
-                20,
-                278,
-                258,
-                28,
-                101,
-            );
-            child(
-                hwnd,
-                "BUTTON",
-                "Выбрать…",
-                WS_TABSTOP,
-                286,
-                278,
-                84,
-                28,
-                302,
-            );
-            let format = setting_combo(
-                hwnd,
-                "Формат сохранения",
-                20,
-                322,
-                350,
-                102,
-                &["PNG — без потерь", "JPEG — с потерями", "WebP — без потерь"],
-                match c.format.as_str() {
-                    "jpg" => 1,
-                    "webp" => 2,
-                    _ => 0,
-                },
-            );
-            child(
-                hwnd,
-                "STATIC",
-                "Качество JPEG (1–100)",
-                0,
-                20,
-                388,
-                245,
-                22,
-                0,
-            );
-            let quality = child(
-                hwnd,
-                "EDIT",
-                &c.jpeg_quality.to_string(),
-                WS_BORDER | WS_TABSTOP | ES_NUMBER as u32,
-                286,
-                384,
-                84,
-                28,
-                103,
-            );
-            let compression = setting_combo(
-                hwnd,
-                "Сжатие PNG",
-                20,
-                428,
-                350,
-                104,
-                &["Быстрое", "Обычное", "Максимальное (медленнее)"],
-                match c.png_compression.as_str() {
-                    "default" => 1,
-                    "best" => 2,
-                    _ => 0,
-                },
-            );
-            child(hwnd, "STATIC", "Лимит истории", 0, 20, 498, 245, 22, 0);
-            let history_limit = child(
-                hwnd,
-                "EDIT",
-                &c.history_limit.to_string(),
-                WS_BORDER | WS_TABSTOP | ES_NUMBER as u32,
-                286,
-                494,
-                84,
-                28,
-                105,
-            );
-            let history = setting_check(
-                hwnd,
-                "Хранить локальную историю снимков",
-                20,
-                536,
-                350,
-                300,
-                c.history_enabled,
-            );
-            let auto_qr = setting_check(
-                hwnd,
-                "Авто-QR после выделения",
-                20,
-                572,
-                350,
-                301,
-                c.auto_qr,
-            );
-            let sound = setting_check(
-                hwnd,
-                "Звуки уведомлений",
-                20,
-                608,
-                350,
-                304,
-                c.sound_enabled,
-            );
-            let video = setting_combo(
-                hwnd,
-                "Формат видео",
-                410,
-                54,
-                370,
-                108,
-                &["MP4 / H.264", "GIF (≤1280 px, ≤15 FPS)"],
-                if c.video_format == "gif" { 1 } else { 0 },
-            );
-            let fps = setting_combo(
-                hwnd,
-                "Частота кадров",
-                410,
-                120,
-                370,
-                109,
-                &["10 FPS", "15 FPS", "24 FPS", "30 FPS"],
-                match c.video_fps {
-                    10 => 0,
-                    24 => 2,
-                    30 => 3,
-                    _ => 1,
-                },
-            );
-            child(
-                hwnd,
-                "STATIC",
-                "Битрейт MP4 (Мбит/с)",
-                0,
-                410,
-                192,
-                250,
-                22,
-                0,
-            );
-            let bitrate = child(
-                hwnd,
-                "EDIT",
-                &(c.video_bitrate / 1_000_000).to_string(),
-                WS_BORDER | WS_TABSTOP | ES_NUMBER as u32,
-                690,
-                188,
-                90,
-                28,
-                110,
-            );
-            child(
-                hwnd,
-                "STATIC",
-                "Запись выбранной области без аудио.\nСтоп: Ctrl+Shift+R или кнопка Стоп.",
-                0,
-                410,
-                238,
-                370,
-                52,
-                0,
-            );
-            let host = setting_combo(
-                hwnd,
-                "Фотохостинг",
-                410,
-                322,
-                370,
-                111,
-                &["Litterbox — 1h", "Catbox — permanent", "Imgur — Client ID"],
-                match c.upload_host.as_str() {
-                    "catbox" => 1,
-                    "imgur" => 2,
-                    _ => 0,
-                },
-            );
-            child(
-                hwnd,
-                "STATIC",
-                "Imgur Client ID (не пароль)",
-                0,
-                410,
-                388,
-                370,
-                22,
-                0,
-            );
-            let client = child(
-                hwnd,
-                "EDIT",
-                &c.imgur_client_id,
-                WS_BORDER | WS_TABSTOP | ES_AUTOHSCROLL as u32,
-                410,
-                414,
-                370,
-                28,
-                112,
-            );
-            child(hwnd,"STATIC","Загрузка только по кнопке. Ссылки публичные.\nНе отправляйте секреты на фотохостинг.",0,410,464,370,52,0);
-            let video_cursor = setting_check(
-                hwnd,
-                "Показывать курсор в видео",
-                410,
-                290,
-                370,
-                307,
-                c.video_cursor,
-            );
-            let hotkey = setting_edit(
-                hwnd,
-                "Клавиша снимка — нажмите сочетание",
-                20,
-                646,
-                350,
-                114,
-                &c.capture_hotkey,
-            );
-            SendMessageW(hotkey, EM_SETREADONLY, 1, 0);
-            SetWindowSubclass(hotkey, Some(hotkey_proc), 1, 0);
-            let confirm = setting_check(
-                hwnd,
-                "Подтверждать отправку в Google",
-                410,
-                600,
-                370,
-                305,
-                c.confirm_google,
-            );
-            let search_mode = setting_combo(
-                hwnd,
-                "Передача в Google",
-                410,
-                536,
-                370,
-                113,
-                &["Быстро — JPEG, до 2048 px", "Оригинал — PNG без потерь"],
-                if c.search_mode == "original" { 1 } else { 0 },
-            );
-            child(
-                hwnd,
-                "BUTTON",
-                "Папка данных",
-                WS_TABSTOP,
-                20,
-                718,
-                150,
-                32,
-                303,
-            );
-            child(
-                hwnd,
-                "BUTTON",
-                "Сохранить",
-                BS_DEFPUSHBUTTON as u32 | WS_TABSTOP,
-                540,
-                718,
-                116,
-                32,
-                1,
-            );
-            child(hwnd, "BUTTON", "Отмена", WS_TABSTOP, 664, 718, 116, 32, 2);
-            fields.extend([
-                theme,
-                dir,
-                format,
-                quality,
-                compression,
-                history_limit,
-                language,
-                toolbar,
-                video,
-                fps,
-                bitrate,
-                host,
-                client,
-                search_mode,
-                hotkey,
-            ]);
-            let compat = setting_check(
-                hwnd,
-                "Захват активного окна (PrintWindow)",
-                410,
-                632,
-                370,
-                306,
-                c.window_capture,
-            );
-            self.settings = Some(SettingsState {
-                hwnd,
-                fields,
-                history,
-                experimental: auto_qr,
-                sound,
-                confirm,
-                compat,
-                video_cursor,
-            });
-            self.settings_enable();
-            ShowWindow(hwnd, SW_SHOW);
-            SetForegroundWindow(hwnd);
-        }
-    }
-    fn settings_enable(&self) {
-        unsafe {
-            if let Some(s) = &self.settings {
-                let f = SendMessageW(s.fields[2], CB_GETCURSEL, 0, 0);
-                EnableWindow(s.fields[3], if f == 1 { 1 } else { 0 });
-                EnableWindow(s.fields[4], if f == 0 { 1 } else { 0 });
-                EnableWindow(
-                    s.fields[5],
-                    if SendMessageW(s.history, BM_GETCHECK, 0, 0) == BST_CHECKED as isize {
-                        1
-                    } else {
-                        0
-                    },
-                );
-                EnableWindow(
-                    s.fields[10],
-                    if SendMessageW(s.fields[8], CB_GETCURSEL, 0, 0) == 0 {
-                        1
-                    } else {
-                        0
-                    },
-                );
-                EnableWindow(
-                    s.fields[12],
-                    if SendMessageW(s.fields[11], CB_GETCURSEL, 0, 0) == 2 {
-                        1
-                    } else {
-                        0
-                    },
-                );
-            }
-        }
-    }
-    fn save_settings(&mut self) -> Result<(), String> {
-        let s = self.settings.as_ref().ok_or("Settings closed")?;
-        let mut c = self.config.clone();
-        unsafe {
-            let selected = |i: usize| SendMessageW(s.fields[i], CB_GETCURSEL, 0, 0) as usize;
-            c.theme = ["dark", "light", "system"]
-                .get(selected(0))
-                .ok_or("Invalid theme")?
-                .to_string();
-            c.save_dir = value(s.fields[1]);
-            c.format = ["png", "jpg", "webp"]
-                .get(selected(2))
-                .ok_or("Invalid image format")?
-                .to_string();
-            c.jpeg_quality = value(s.fields[3]).parse().unwrap_or(c.jpeg_quality);
-            c.png_compression = ["fast", "default", "best"]
-                .get(selected(4))
-                .ok_or("Invalid compression")?
-                .to_string();
-            c.history_limit = value(s.fields[5]).parse().unwrap_or(c.history_limit);
-            c.language = ["ru", "en"]
-                .get(selected(6))
-                .ok_or("Invalid language")?
-                .to_string();
-            c.toolbar = ["compact", "edge"]
-                .get(selected(7))
-                .ok_or("Invalid toolbar")?
-                .to_string();
-            c.video_format = ["mp4", "gif"]
-                .get(selected(8))
-                .ok_or("Invalid video format")?
-                .to_string();
-            c.video_fps = *[10, 15, 24, 30].get(selected(9)).ok_or("Invalid FPS")?;
-            c.video_bitrate = value(s.fields[10])
-                .parse::<u32>()
-                .map_err(|_| "Invalid bitrate")?
-                .checked_mul(1_000_000)
-                .ok_or("Invalid bitrate")?;
-            c.upload_host = ["litterbox", "catbox", "imgur"]
-                .get(selected(11))
-                .ok_or("Invalid image host")?
-                .to_string();
-            c.imgur_client_id = value(s.fields[12]).trim().into();
-            c.search_mode = if selected(13) == 1 {
-                "original"
-            } else {
-                "fast"
-            }
-            .into();
-            c.history_enabled = SendMessageW(s.history, BM_GETCHECK, 0, 0) == BST_CHECKED as isize;
-            c.auto_qr = SendMessageW(s.experimental, BM_GETCHECK, 0, 0) == BST_CHECKED as isize;
-            c.sound_enabled = SendMessageW(s.sound, BM_GETCHECK, 0, 0) == BST_CHECKED as isize;
-            c.window_capture = SendMessageW(s.compat, BM_GETCHECK, 0, 0) == BST_CHECKED as isize;
-            c.capture_hotkey = value(s.fields[14]).trim().to_string();
-            c.video_cursor =
-                SendMessageW(s.video_cursor, BM_GETCHECK, 0, 0) == BST_CHECKED as isize;
-            c.toolbar_dock = "auto".into();
-            c.confirm_google = SendMessageW(s.confirm, BM_GETCHECK, 0, 0) == BST_CHECKED as isize;
-        }
-        c.validate()?;
-        std::fs::create_dir_all(&c.save_dir).map_err(|e| e.to_string())?;
-        let changed = luma_shot::hotkey::parse(&c.capture_hotkey)?
-            != luma_shot::hotkey::parse(&self.config.capture_hotkey)?
-            || !self.hotkey;
-        let next_id = if self.hotkey_id == 1 { 3 } else { 1 };
-        if changed {
-            let hk = luma_shot::hotkey::parse(&c.capture_hotkey)?;
-            if unsafe { RegisterHotKey(self.main, next_id, hk.modifiers | MOD_NOREPEAT, hk.key) }
-                == 0
-            {
-                return Err(
-                    "Сочетание занято Windows или другой программой. Прежняя клавиша сохранена."
-                        .into(),
-                );
-            }
-        }
-        if let Err(e) = c.save() {
-            if changed {
-                unsafe {
-                    UnregisterHotKey(self.main, next_id);
-                }
-            }
-            return Err(e);
-        }
-        if changed {
-            unsafe {
-                if self.hotkey {
-                    UnregisterHotKey(self.main, self.hotkey_id);
-                }
-            }
-            self.hotkey_id = next_id;
-            self.hotkey = true;
-        }
-        self.config = c;
-        luma_shot::i18n::configure(&self.config.language, &self.config.toolbar);
-        luma_shot::dock::configure(&self.config.toolbar_dock);
-        self.schedule_qr();
-        self.invalidate();
-        Ok(())
-    }
-    fn close_settings(&mut self) {
-        if let Some(s) = self.settings.take() {
-            unsafe {
-                DestroyWindow(s.hwnd);
-                if !self.overlay.is_null() {
-                    ShowWindow(self.overlay, SW_SHOW);
-                    SetForegroundWindow(self.overlay);
-                }
-            }
-        }
-    }
-    fn show_text(&mut self, title: &str, text: &str, pending: Option<Image>) {
-        unsafe {
-            if let Some(old) = self.text.take() {
-                DestroyWindow(old.hwnd);
-            }
-            let ask = false;
-            let _ = pending;
-            let hwnd = CreateWindowExW(
-                WS_EX_APPWINDOW,
-                wide("LumaText").as_ptr(),
-                wide(luma_shot::i18n::tr(title)).as_ptr(),
-                WS_OVERLAPPEDWINDOW,
-                CW_USEDEFAULT,
-                CW_USEDEFAULT,
-                800,
-                560,
-                null_mut(),
-                null_mut(),
-                GetModuleHandleW(null()),
-                self as *mut _ as _,
-            );
-            let url = luma_shot::links::http_url(text);
-            let edit = child(
-                hwnd,
-                "EDIT",
-                text,
-                WS_BORDER
-                    | WS_VSCROLL
-                    | (ES_MULTILINE as u32)
-                    | (ES_AUTOVSCROLL as u32)
-                    | (ES_WANTRETURN as u32)
-                    | WS_TABSTOP
-                    | if ask { 0 } else { ES_READONLY as u32 },
-                16,
-                16,
-                750,
-                if url.is_some() { 410 } else { 440 },
-                100,
-            );
-            SendMessageW(edit, EM_SETLIMITTEXT, 1200000, 0);
-            child(
-                hwnd,
-                "BUTTON",
-                if ask {
-                    "Копировать текст"
-                } else {
-                    "Копировать текст"
-                },
-                (BS_DEFPUSHBUTTON as u32) | WS_TABSTOP,
-                500,
-                470,
-                144,
-                32,
-                1,
-            );
-            child(hwnd, "BUTTON", "Закрыть", WS_TABSTOP, 654, 470, 100, 32, 2);
-
-            if let Some(ref link) = url {
-                let init = INITCOMMONCONTROLSEX {
-                    dwSize: size_of::<INITCOMMONCONTROLSEX>() as u32,
-                    dwICC: ICC_LINK_CLASS,
-                };
-                InitCommonControlsEx(&init);
-                let escaped = link.replace('&', "&amp;");
-                child(
-                    hwnd,
-                    "SysLink",
-                    &format!("<a href=\"{escaped}\">{escaped}</a>"),
-                    WS_TABSTOP,
-                    16,
-                    438,
-                    750,
-                    24,
-                    4,
-                );
-
-                child(
-                    hwnd,
-                    "BUTTON",
-                    "Открыть ссылку",
-                    WS_TABSTOP,
-                    16,
-                    470,
-                    180,
-                    32,
-                    3,
-                );
-            }
-            self.text = Some(TextState { hwnd, edit, url });
-            ShowWindow(hwnd, SW_SHOW);
-            SetForegroundWindow(hwnd);
-            SetFocus(edit);
-            SendMessageW(edit, EM_SETSEL, 0, -1);
-        }
-    }
-    fn text_submit(&mut self) {
-        if let Some(s) = &self.text {
-            let text = unsafe { value(s.edit) };
-            if let Err(e) = native::clipboard_text(self.main, &text) {
-                self.fail(&e)
-            } else {
-                unsafe {
-                    SetWindowTextW(
-                        GetDlgItem(s.hwnd, 1),
-                        wide(luma_shot::i18n::tr("Скопировано")).as_ptr(),
-                    );
-                }
-            }
-        }
-    }
-    fn show_history(&mut self) {
-        unsafe {
-            if let Some(s) = &self.history {
-                SetForegroundWindow(s.hwnd);
-                return;
-            }
-            let hwnd = CreateWindowExW(
-                WS_EX_APPWINDOW,
-                wide("LumaHistory").as_ptr(),
-                wide("PrtSc · Local history").as_ptr(),
-                WS_OVERLAPPEDWINDOW,
-                CW_USEDEFAULT,
-                CW_USEDEFAULT,
-                820,
-                570,
-                null_mut(),
-                null_mut(),
-                GetModuleHandleW(null()),
-                self as *mut _ as _,
-            );
-            child(
-                hwnd,
-                "STATIC",
-                "Поиск по локальной истории и распознанному тексту",
-                0,
-                18,
-                16,
-                760,
-                24,
-                0,
-            );
-            let search = child(
-                hwnd,
-                "EDIT",
-                "",
-                WS_BORDER | (ES_AUTOHSCROLL as u32) | WS_TABSTOP,
-                18,
-                46,
-                764,
-                30,
-                201,
-            );
-            let list = child(
-                hwnd,
-                "LISTBOX",
-                "",
-                WS_BORDER
-                    | WS_VSCROLL
-                    | (LBS_NOTIFY as u32)
-                    | (LBS_NOINTEGRALHEIGHT as u32)
-                    | WS_TABSTOP,
-                18,
-                90,
-                764,
-                364,
-                202,
-            );
-            child(
-                hwnd,
-                "BUTTON",
-                "Открыть выбранный",
-                (BS_DEFPUSHBUTTON as u32) | WS_TABSTOP,
-                18,
-                474,
-                144,
-                32,
-                1,
-            );
-            child(
-                hwnd,
-                "BUTTON",
-                "Удалить всю историю…",
-                WS_TABSTOP,
-                176,
-                474,
-                180,
-                32,
-                3,
-            );
-            child(hwnd, "BUTTON", "Закрыть", WS_TABSTOP, 682, 474, 100, 32, 2);
-            self.history = Some(HistoryState {
-                hwnd,
-                search,
-                list,
-                filtered: vec![],
-            });
-            self.filter_history();
-            ShowWindow(hwnd, SW_SHOW);
-            SetForegroundWindow(hwnd);
-            SetFocus(search);
-        }
-    }
-    fn filter_history(&mut self) {
-        if let Some(s) = &mut self.history {
-            unsafe {
-                let q = value(s.search);
-                let entries = history::load();
-                s.filtered = history::search(&entries, &q).into_iter().cloned().collect();
-                SendMessageW(s.list, LB_RESETCONTENT, 0, 0);
-                for e in &s.filtered {
-                    let (date, stamp) = util::utc_stamp(e.created);
-                    let preview = e
-                        .text
-                        .replace(['\r', '\n'], " ")
-                        .chars()
-                        .take(76)
-                        .collect::<String>();
-                    let label = format!(
-                        "{}-{}-{} {}:{}   {} × {}   {}",
-                        &date[..4],
-                        &date[4..6],
-                        &date[6..],
-                        &stamp[9..11],
-                        &stamp[11..13],
-                        e.width,
-                        e.height,
-                        preview
-                    );
-                    SendMessageW(s.list, LB_ADDSTRING, 0, wide(&label).as_ptr() as isize);
-                }
-                if s.filtered.is_empty() {
-                    SendMessageW(s.list,LB_ADDSTRING,0,wide(luma_shot::i18n::tr("История пуста. Включите её в настройках. Текст добавляется при запуске OCR.")).as_ptr() as isize);
-                }
-            }
-        }
-    }
-    fn history_open(&mut self) {
-        if let Some(s) = &self.history {
-            let i = unsafe { SendMessageW(s.list, LB_GETCURSEL, 0, 0) };
-            if i >= 0 {
-                if let Some(e) = s.filtered.get(i as usize) {
-                    if let Ok(p) = history::path(e) {
-                        native::open(&p)
-                    }
-                }
-            }
-        }
-    }
-}
-const RECORD_SNAPSHOT: u32 = WM_APP + 44;
-static SNAPSHOT_HOOK: std::sync::atomic::AtomicIsize = std::sync::atomic::AtomicIsize::new(0);
-unsafe fn release_snapshot_hook() {
-    let h = SNAPSHOT_HOOK.swap(0, std::sync::atomic::Ordering::Relaxed);
-    if h != 0 {
-        UnhookWindowsHookEx(h as HHOOK);
-    }
-}
-unsafe extern "system" fn snapshot_record_hook(code: i32, w: WPARAM, l: LPARAM) -> LRESULT {
-    if code >= 0 {
-        let event = &*(l as *const KBDLLHOOKSTRUCT);
-        if event.vkCode == VK_SNAPSHOT as u32 {
-            let field = GetFocus();
-            if !field.is_null()
-                && GetDlgCtrlID(field) == 114
-                && GetParent(field) == FindWindowW(wide("LumaSettings").as_ptr(), null())
-            {
-                let modifiers = (if GetAsyncKeyState(VK_CONTROL as i32) < 0 {
-                    MOD_CONTROL
-                } else {
-                    0
-                }) | (if GetAsyncKeyState(VK_SHIFT as i32) < 0 {
-                    MOD_SHIFT
-                } else {
-                    0
-                }) | (if GetAsyncKeyState(VK_MENU as i32) < 0 {
-                    MOD_ALT
-                } else {
-                    0
-                }) | (if GetAsyncKeyState(VK_LWIN as i32) < 0
-                    || GetAsyncKeyState(VK_RWIN as i32) < 0
-                {
-                    MOD_WIN
-                } else {
-                    0
-                });
-                PostMessageW(field, RECORD_SNAPSHOT, modifiers as usize, 0);
-                return 1;
-            }
-        }
-    }
-    CallNextHookEx(null_mut(), code, w, l)
-}
-unsafe extern "system" fn hotkey_proc(
-    hwnd: HWND,
-    msg: u32,
-    w: WPARAM,
-    l: LPARAM,
-    _id: usize,
-    _data: usize,
-) -> LRESULT {
-    match msg {
-        WM_GETDLGCODE => {
-            // Let Tab/Shift+Tab remain normal dialog navigation.
-            if w == VK_TAB as usize {
-                return 0;
-            }
-            return (DLGC_WANTALLKEYS | DLGC_WANTCHARS | DLGC_WANTARROWS) as isize;
-        }
-        WM_SETFOCUS => {
-            SendMessageW(hwnd, EM_SETSEL, 0, -1);
-            release_snapshot_hook();
-            let hook = SetWindowsHookExW(
-                WH_KEYBOARD_LL,
-                Some(snapshot_record_hook),
-                GetModuleHandleW(null()),
-                0,
-            );
-            SNAPSHOT_HOOK.store(hook as isize, std::sync::atomic::Ordering::Relaxed);
-        }
-        WM_KILLFOCUS => release_snapshot_hook(),
-        RECORD_SNAPSHOT => {
-            if let Ok(text) = luma_shot::hotkey::format_event(w as u32, VK_SNAPSHOT as u32) {
-                SetWindowTextW(hwnd, wide(&text).as_ptr());
-                SendMessageW(hwnd, EM_SETSEL, 0, -1);
-            }
-            return 0;
-        }
-        WM_KEYDOWN | WM_SYSKEYDOWN | WM_KEYUP | WM_SYSKEYUP => {
-            if (msg == WM_KEYUP || msg == WM_SYSKEYUP) && w != VK_SNAPSHOT as usize {
-                return 0;
-            }
-            let key = w as u32;
-            let modifiers = (if ctrl() { MOD_CONTROL } else { 0 })
-                | (if shift() { MOD_SHIFT } else { 0 })
-                | (if alt() { MOD_ALT } else { 0 })
-                | (if GetKeyState(VK_LWIN as i32) < 0 || GetKeyState(VK_RWIN as i32) < 0 {
-                    MOD_WIN
-                } else {
-                    0
-                });
-            if key == VK_ESCAPE as u32 {
-                if let Some(a) = app(GetParent(hwnd)) {
-                    SetWindowTextW(hwnd, wide(&a.config.capture_hotkey).as_ptr());
-                }
-                SetFocus(GetDlgItem(GetParent(hwnd), 1));
-                return 0;
-            }
-            if key == VK_RETURN as u32 && modifiers == 0 {
-                SetFocus(GetDlgItem(GetParent(hwnd), 1));
-                return 0;
-            }
-            if let Ok(text) = luma_shot::hotkey::format_event(modifiers, key) {
-                SetWindowTextW(hwnd, wide(&text).as_ptr());
-                SendMessageW(hwnd, EM_SETSEL, 0, -1);
-            }
-            return 0;
-        }
-        WM_CHAR | WM_SYSCHAR => return 0,
-        WM_NCDESTROY => {
-            release_snapshot_hook();
-            RemoveWindowSubclass(hwnd, Some(hotkey_proc), 1);
-        }
-        _ => {}
-    }
-    DefSubclassProc(hwnd, msg, w, l)
-}
-unsafe extern "system" fn settings_proc(hwnd: HWND, msg: u32, w: WPARAM, l: LPARAM) -> LRESULT {
-    if msg == WM_NCCREATE {
-        attach(hwnd, l)
-    }
-    if let Some(a) = app(hwnd) {
-        match msg {
-            WM_COMMAND => {
-                match w as u16 {
-                    1 => match a.save_settings() {
-                        Ok(()) => a.close_settings(),
-                        Err(e) => {
-                            MessageBoxW(
-                                hwnd,
-                                wide(&e).as_ptr(),
-                                wide(luma_shot::i18n::tr("Проверьте настройки")).as_ptr(),
-                                if a.config.sound_enabled {
-                                    MB_ICONERROR
-                                } else {
-                                    MB_OK
-                                },
-                            );
-                        }
-                    },
-                    2 => a.close_settings(),
-                    302 => {
-                        if let Some(path) = native::choose_folder(hwnd) {
-                            if let Some(s) = &a.settings {
-                                SetWindowTextW(s.fields[1], wide(&path.to_string_lossy()).as_ptr());
-                            }
-                        }
-                    }
-                    303 => {
-                        let dir = util::data_dir();
-                        let _ = std::fs::create_dir_all(&dir);
-                        native::open(&dir);
-                    }
-                    102 | 300 | 108 | 111 => a.settings_enable(),
-                    _ => {}
-                }
-                return 0;
-            }
-            WM_CLOSE => {
-                a.close_settings();
-                return 0;
-            }
-            _ => {}
-        }
-    }
-    DefWindowProcW(hwnd, msg, w, l)
-}
-unsafe extern "system" fn text_proc(hwnd: HWND, msg: u32, w: WPARAM, l: LPARAM) -> LRESULT {
-    if msg == WM_GETMINMAXINFO {
-        let limits = &mut *(l as *mut MINMAXINFO);
-        limits.ptMinTrackSize.x = 600;
-        limits.ptMinTrackSize.y = 360;
-        return 0;
-    }
-    if msg == WM_NCCREATE {
-        attach(hwnd, l)
-    }
-    if let Some(a) = app(hwnd) {
-        match msg {
-            WM_NOTIFY => {
-                let n = &*(l as *const NMHDR);
-                if n.idFrom == 4 && (n.code == NM_CLICK || n.code == NM_RETURN) {
-                    if let Some(url) = a.text.as_ref().and_then(|s| s.url.as_ref()) {
-                        native::open(Path::new(url));
-                    }
-                    return 0;
-                }
-            }
-
-            WM_COMMAND => {
-                match w as u16 {
-                    1 => a.text_submit(),
-                    3 => {
-                        if let Some(url) = a.text.as_ref().and_then(|s| s.url.as_ref()) {
-                            native::open(Path::new(url));
-                        }
-                    }
-                    2 => {
-                        a.text = None;
-                        DestroyWindow(hwnd);
-                    }
-                    _ => {}
-                }
-                return 0;
-            }
-            WM_CLOSE => {
-                a.text = None;
-                DestroyWindow(hwnd);
-                return 0;
-            }
-            WM_SIZE => {
-                if let Some(s) = &a.text {
-                    let (width, height) = (l as u16 as i32, ((l >> 16) as u16) as i32);
-                    MoveWindow(
-                        s.edit,
-                        16,
-                        16,
-                        (width - 32).max(100),
-                        (height - if s.url.is_some() { 112 } else { 82 }).max(60),
-                        1,
-                    );
-                    if !GetDlgItem(hwnd, 4).is_null() {
-                        MoveWindow(
-                            GetDlgItem(hwnd, 4),
-                            16,
-                            height - 90,
-                            (width - 32).max(100),
-                            24,
-                            1,
-                        );
-                    }
-                    if !GetDlgItem(hwnd, 3).is_null() {
-                        MoveWindow(GetDlgItem(hwnd, 3), 16, height - 50, 180, 32, 1);
-                    }
-                    let b = GetDlgItem(hwnd, 1);
-                    MoveWindow(b, (width - 300).max(16), height - 50, 144, 32, 1);
-                    let b = GetDlgItem(hwnd, 2);
-                    MoveWindow(b, (width - 146).max(170), height - 50, 130, 32, 1);
-                }
-                return 0;
-            }
-            _ => {}
-        }
-    }
-    DefWindowProcW(hwnd, msg, w, l)
-}
-unsafe extern "system" fn history_proc(hwnd: HWND, msg: u32, w: WPARAM, l: LPARAM) -> LRESULT {
-    if msg == WM_GETMINMAXINFO {
-        let limits = &mut *(l as *mut MINMAXINFO);
-        limits.ptMinTrackSize.x = 640;
-        limits.ptMinTrackSize.y = 420;
-        return 0;
-    }
-    if msg == WM_NCCREATE {
-        attach(hwnd, l)
-    }
-    if let Some(a) = app(hwnd) {
-        match msg {
-            WM_COMMAND => {
-                let id = w as u16;
-                let event = (w >> 16) as u16;
-                match id {
-                    1 => a.history_open(),
-                    2 => {
-                        a.history = None;
-                        DestroyWindow(hwnd);
-                    }
-                    3 => {
-                        if MessageBoxW(
-                            hwnd,
-                            wide(luma_shot::i18n::tr(
-                                "Удалить всю локальную историю снимков и распознанный текст?",
-                            ))
-                            .as_ptr(),
-                            wide(luma_shot::i18n::tr("Очистить историю")).as_ptr(),
-                            MB_YESNO | MB_ICONWARNING,
-                        ) == IDYES
-                        {
-                            if let Err(e) = history::clear() {
-                                a.fail(&e)
-                            }
-                            a.filter_history();
-                        }
-                    }
-                    201 if event == EN_CHANGE as u16 => a.filter_history(),
-                    202 if event == LBN_DBLCLK as u16 => a.history_open(),
-                    _ => {}
-                }
-                return 0;
-            }
-            WM_CLOSE => {
-                a.history = None;
-                DestroyWindow(hwnd);
-                return 0;
-            }
-            WM_SIZE => {
-                if let Some(s) = &a.history {
-                    let (width, height) = (l as u16 as i32, ((l >> 16) as u16) as i32);
-                    MoveWindow(s.search, 18, 46, (width - 36).max(100), 30, 1);
-                    MoveWindow(
-                        s.list,
-                        18,
-                        90,
-                        (width - 36).max(100),
-                        (height - 162).max(100),
-                        1,
-                    );
-                    for (id, x, w) in [
-                        (1, 18, 170),
-                        (3, 198, 180),
-                        (2, (width - 118).max(370), 100),
-                    ] {
-                        MoveWindow(GetDlgItem(hwnd, id), x, height - 52, w, 32, 1);
-                    }
-                }
                 return 0;
             }
             _ => {}

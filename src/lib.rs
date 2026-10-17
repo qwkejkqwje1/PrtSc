@@ -27,3 +27,8 @@ pub mod dock;
 pub mod links;
 
 pub mod hotkey;
+
+pub mod damage;
+pub mod text;
+
+pub mod translate;

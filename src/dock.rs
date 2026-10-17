@@ -1,26 +1,8 @@
 use crate::{image::Rect, ui::Layout};
-use std::sync::atomic::{AtomicI32, AtomicU8, Ordering};
-static MODE: AtomicU8 = AtomicU8::new(0);
-static X: AtomicI32 = AtomicI32::new(8);
-static Y: AtomicI32 = AtomicI32::new(36);
-pub fn configure(s: &str) {
-    MODE.store(
-        match s {
-            "left" => 1,
-            "right" => 2,
-            "top" => 3,
-            "bottom" => 4,
-            "floating" => 5,
-            _ => 0,
-        },
-        Ordering::Relaxed,
-    );
-}
-pub fn float(x: i32, y: i32) {
-    X.store(x, Ordering::Relaxed);
-    Y.store(y, Ordering::Relaxed);
-    MODE.store(5, Ordering::Relaxed);
-}
+// Compatibility shim for old clients: selection-attached layouts ignore docking.
+// No process-global position or mode is retained.
+pub fn configure(_s: &str) {}
+pub fn float(_x: i32, _y: i32) {}
 pub fn snap(p: Rect, w: u32, h: u32) -> &'static str {
     if p.x <= 32 {
         "left"

@@ -1,0 +1,3 @@
+win_final_probe command 10 => win_gui_probe drag 100 90 780 585 => win_final_probe command 116 => win_final_probe command 116 => win_final_probe command 13 => win_final_probe command 10 => win_gui_probe drag 100 90 780 585 => win_final_probe command 116 => win_final_probe command 116 => win_final_probe command 13 => win_final_probe command 10 => win_gui_probe drag 100 90 780 585 => win_final_probe command 116 => win_actions_probe text => win_actions_probe text => text=MP4 container creation: 0xD0000005. Select GIF if Windows Media Foundation is unavailable.
+open_link_button=0
+win_actions_probe textclose => win_final_probe command 13 => 

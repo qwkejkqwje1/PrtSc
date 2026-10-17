@@ -4,14 +4,14 @@ pub(super) struct FrameCache {
     scale: f32,
     pub scene: Image,
     plain: native::Raster,
-    dim: native::Raster,
+    black: native::Raster,
     back: native::Raster,
     chrome_key: String,
     chrome: Vec<(native::Raster, Rect)>,
 }
 impl FrameCache {
-    fn new(s: &Session, annotations: Vec<Annotation>) -> Result<Self, String> {
-        let mut scene = s.renderer.flatten(&s.editor.image, &annotations);
+    fn scene(s: &Session, annotations: &[Annotation]) -> Result<Image, String> {
+        let mut scene = s.renderer.flatten(&s.editor.image, annotations);
         if s.view.scale != 1. || scene.width != s.view.width || scene.height != s.view.height {
             let scaled = luma_shot::render::resized(
                 &scene,
@@ -25,19 +25,68 @@ impl FrameCache {
                 .for_each(|p| p.copy_from_slice(&[22, 25, 31, 255]));
             ui::paste(&mut scene, &scaled, 0, 0);
         }
+        Ok(scene)
+    }
+    fn new(s: &Session, annotations: Vec<Annotation>) -> Result<Self, String> {
+        let scene = Self::scene(s, &annotations)?;
         let plain = native::Raster::new(&scene, false)?;
-        let dim = native::Raster::new(&scene, true)?;
-        let back = native::Raster::new(&scene, false)?;
+        let back = native::Raster::empty(scene.width, scene.height)?;
+        let mut black = Image::new(1, 1)?;
+        black.rgba.copy_from_slice(&[0, 0, 0, 255]);
+        let black = native::Raster::new(&black, false)?;
         Ok(Self {
             annotations,
             scale: s.view.scale,
             scene,
             plain,
-            dim,
+            black,
             back,
             chrome_key: String::new(),
             chrome: vec![],
         })
+    }
+    fn reset(&mut self, s: &Session, annotations: Vec<Annotation>) -> Result<(), String> {
+        let scene = Self::scene(s, &annotations)?;
+        if scene.width != self.scene.width || scene.height != self.scene.height {
+            *self = Self::new(s, annotations)?;
+            return Ok(());
+        }
+        self.plain.update_region(
+            &scene,
+            Rect {
+                x: 0,
+                y: 0,
+                w: scene.width,
+                h: scene.height,
+            },
+            false,
+        )?;
+        self.scene = scene;
+        self.annotations = annotations;
+        self.scale = s.view.scale;
+        self.chrome_key.clear();
+        Ok(())
+    }
+    fn append(&mut self, s: &Session, annotations: &[Annotation]) -> Result<bool, String> {
+        if self.scale != 1.
+            || s.view.scale != 1.
+            || self.scene.width != s.editor.image.width
+            || self.scene.height != s.editor.image.height
+            || annotations.len() != self.annotations.len() + 1
+            || annotations[..self.annotations.len()] != self.annotations
+        {
+            return Ok(false);
+        }
+        let a = annotations.last().unwrap();
+        let damage = s
+            .renderer
+            .bounds(a)
+            .clamp(self.scene.width, self.scene.height);
+        s.renderer.annotation(&mut self.scene, a);
+        self.plain.update_region(&self.scene, damage, false)?;
+        self.annotations.push(a.clone());
+        self.chrome_key.clear();
+        Ok(true)
     }
 }
 fn intersect(a: RECT, b: RECT) -> RECT {
@@ -62,6 +111,7 @@ pub(super) unsafe fn paint(
     dirty: RECT,
     dark: bool,
     colors: &[[u8; 4]; 7],
+    style: ui::ToolbarStyle,
 ) -> Result<(), String> {
     s.paint_count += 1;
     if !s.font_ready
@@ -83,19 +133,56 @@ pub(super) unsafe fn paint(
         .filter(|(i, _)| Some(*i) != exclude)
         .map(|(_, a)| a.clone())
         .collect();
-    if s.cache
+    let changed = s
+        .cache
         .as_ref()
         .map(|c| c.annotations != annotations || c.scale != s.view.scale)
-        .unwrap_or(true)
-    {
-        s.cache = Some(FrameCache::new(s, annotations)?);
-        s.scene_builds += 1;
+        .unwrap_or(true);
+    if changed {
+        if let Some(mut cache) = s.cache.take() {
+            if cache.append(s, &annotations)? {
+                s.scene_appends += 1;
+            } else {
+                cache.reset(s, annotations)?;
+                s.scene_builds += 1;
+            }
+            s.cache = Some(cache);
+        } else {
+            s.cache = Some(FrameCache::new(s, annotations)?);
+            s.scene_builds += 1;
+        }
     }
     let c = s.cache.as_mut().unwrap();
     let window_dc = dc;
     let dc = c.back.dc;
-    // Compose the entire update offscreen; only the finished frame reaches HWND.
-    c.dim.paint(dc, dirty);
+    // Recompose only dirty pixels in the persistent back buffer.
+    let clip = SaveDC(dc);
+    IntersectClipRect(dc, dirty.left, dirty.top, dirty.right, dirty.bottom);
+    c.plain.paint(dc, dirty);
+    let blend = BLENDFUNCTION {
+        BlendOp: AC_SRC_OVER as u8,
+        BlendFlags: 0,
+        SourceConstantAlpha: 153,
+        AlphaFormat: 0,
+    };
+    if AlphaBlend(
+        dc,
+        dirty.left,
+        dirty.top,
+        dirty.right - dirty.left,
+        dirty.bottom - dirty.top,
+        c.black.dc,
+        0,
+        0,
+        1,
+        1,
+        blend,
+    ) == 0
+    {
+        let error = native::last("AlphaBlend");
+        RestoreDC(dc, clip);
+        return Err(error);
+    }
     let selection = s.editor.selection().map(|r| s.view.rect(r));
     if let Some(r) = selection {
         let rr = intersect(dirty, wr(r));
@@ -116,15 +203,7 @@ pub(super) unsafe fn paint(
             p.y *= s.view.scale;
         }
         d.width *= s.view.scale;
-        let r = d.rect();
-        let pad = (d.width * 12.).ceil() as i32 + 8;
-        let r = Rect {
-            x: r.x - pad,
-            y: r.y - pad,
-            w: r.w + 2 * pad as u32,
-            h: r.h + 2 * pad as u32,
-        }
-        .clamp(c.scene.width, c.scene.height);
+        let r = s.renderer.bounds(&d).clamp(c.scene.width, c.scene.height);
         if r.valid() {
             let mut patch = c.scene.crop(r)?;
             d.translate(-r.x as f32, -r.y as f32);
@@ -185,8 +264,8 @@ pub(super) unsafe fn paint(
         );
     }
     if selection.is_some() && !matches!(s.drag, Drag::Selection(_) | Drag::RegionResize { .. }) {
-        let mut layout = Layout::with_palette(s.view.width, s.view.height, selection, colors);
-        luma_shot::dock::apply(&mut layout, s.view.width, s.view.height);
+        let layout = Layout::for_style(s.view.width, s.view.height, selection, colors, style);
+
         let hovered = layout.hit(s.cursor.0, s.cursor.1);
         let key = format!(
             "{:?}:{:?}:{}:{:?}:{:?}:{}:{}:{}:{}",
@@ -312,6 +391,35 @@ pub(super) unsafe fn paint(
             DeleteObject(pen);
         }
     }
+    if s.typing {
+        if let Some(d) = s.editor.draft.as_ref() {
+            let r = s.view.rect(d.rect());
+            let pen = CreatePen(PS_DOT, 1, 0x00ffa750);
+            let old = SelectObject(dc, pen);
+            let brush = SelectObject(dc, GetStockObject(NULL_BRUSH));
+            Rectangle(
+                dc,
+                r.x - 3,
+                r.y - 3,
+                r.x + r.w as i32 + 3,
+                r.y + r.h as i32 + 3,
+            );
+            let (cx, cy) = luma_shot::text::caret(&d.text, luma_shot::text::size(d.width));
+            let p = d.points[0];
+            let x = ((p.x + cx) * s.view.scale) as i32;
+            let y = ((p.y + cy) * s.view.scale) as i32;
+            SelectObject(dc, GetStockObject(WHITE_PEN));
+            MoveToEx(dc, x, y, null_mut());
+            LineTo(
+                dc,
+                x,
+                y + (luma_shot::text::size(d.width) * s.view.scale).ceil() as i32,
+            );
+            SelectObject(dc, brush);
+            SelectObject(dc, old);
+            DeleteObject(pen);
+        }
+    }
     if alt() {
         let (x, y) = s.cursor;
         let px = (x + 26).clamp(4, (s.view.width as i32 - 134).max(4));
@@ -339,8 +447,11 @@ pub(super) unsafe fn paint(
         SelectObject(dc, old);
         DeleteObject(pen);
     }
+    RestoreDC(dc, clip);
     GdiFlush();
     c.back.paint(window_dc, dirty);
+    s.dirty_pixels +=
+        (dirty.right - dirty.left).max(0) as u64 * (dirty.bottom - dirty.top).max(0) as u64;
     s.present_count += 1;
     Ok(())
 }

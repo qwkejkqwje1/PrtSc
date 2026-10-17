@@ -1,0 +1,12 @@
+{
+  "preview_does_not_open_browser": true,
+  "cancel_restores_editor": true,
+  "explicit_open_edited_unicode_exact_and_closes_editor": true,
+  "long_text_direct_disabled": true,
+  "manual_paste_exact_clipboard_and_no_text_in_url": true,
+  "no_ocr_text_in_settings": true,
+  "blank_text_disabled": true,
+  "escape_restores_editor": true,
+  "ocr_unavailable_keeps_editor_no_browser": true,
+  "runtime": "Windows x64 EXE under Wine; preview fixtures, no real Windows OCR or external translation requests"
+}

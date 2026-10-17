@@ -1,12 +1,8 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 static EN: AtomicBool = AtomicBool::new(false);
 static LIGHTSHOT: AtomicBool = AtomicBool::new(false);
-static MINIMAL: AtomicBool = AtomicBool::new(false);
-static COMPACT: AtomicBool = AtomicBool::new(false);
 pub fn configure(language: &str, toolbar: &str) {
     EN.store(language == "en", Ordering::Relaxed);
-    COMPACT.store(true, Ordering::Relaxed);
-    MINIMAL.store(false, Ordering::Relaxed);
     LIGHTSHOT.store(
         toolbar == "edge" || toolbar == "lightshot" || toolbar == "minimal",
         Ordering::Relaxed,
@@ -16,19 +12,36 @@ pub fn english() -> bool {
     EN.load(Ordering::Relaxed)
 }
 pub fn compact() -> bool {
-    COMPACT.load(Ordering::Relaxed)
+    true
 }
 pub fn lightshot() -> bool {
     LIGHTSHOT.load(Ordering::Relaxed)
 }
 pub fn minimal() -> bool {
-    MINIMAL.load(Ordering::Relaxed)
+    false
 }
 pub fn tr(s: &str) -> &str {
     if !english() {
         return s;
     }
     match s {
+        "Перевести текст · Ctrl+Shift+T · через браузер" => "Translate text · Ctrl+Shift+T · in browser",
+        "Распознаём текст для перевода" => "Recognizing text for translation",
+        "Текст не найден. Попробуйте выделить область точнее." => "No text found. Try selecting a clearer area.",
+        "PrtSc · Перевод текста" => "PrtSc · Translate text",
+        "Перевод выделения" => "Translate selection",
+        "Текст распознан на устройстве. Картинка не отправляется.\nПроверьте и отредактируйте текст перед открытием Google Translate." => "Text was recognized on this device. The image is not sent.\nReview and edit the text before opening Google Translate.",
+        "Распознанный текст" => "Recognized text",
+        "Язык перевода" => "Translate to",
+        "Через ссылку текст попадёт в адрес страницы и может сохраниться в истории браузера.\nДля длинного или личного текста: «Скопировать и открыть», затем вставьте его вручную.\nЭто исключает текст из URL, но не делает Google Translate офлайн-сервисом." => "Opening a text link puts its contents in the address and possibly browser history.\nFor long or private text, choose Copy and open, then paste it yourself.\nThis keeps text out of the URL; Google Translate is still an online service.",
+        "Скопировать и открыть" => "Copy and open",
+        "Открыть перевод" => "Open translation",
+        "Можно открыть перевод. В ссылку будет включён весь текст из поля." => "Ready. The link will include all text from the field.",
+        "Текст слишком длинный для ссылки. Скопируйте его и вставьте в переводчик вручную." => "Too long for a link. Copy the text and paste it into the translator yourself.",
+        "Сначала добавьте текст для перевода." => "Enter some text to translate.",
+        "Проверьте текст и язык. Для вставки без URL используйте копирование." => "Check the text and language. Use Copy and open to keep text out of the URL.",
+        "Текст скопирован. Вставьте его в переводчик: Ctrl+V." => "Text copied. Paste it into the translator with Ctrl+V.",
+        "PrtSc 1.1 · Справка" => "PrtSc 1.1 · About & help",
         "Клавиша снимка — нажмите сочетание" => {
             "Capture shortcut — press keys here"
         }
@@ -82,6 +95,11 @@ pub fn tr(s: &str) -> &str {
             "Saved · click to open folder"
         }
 
+        "PrtSc 1.0 · Справка" => "PrtSc 1.0 · Help",
+        "Размытие · B · не для секретов" => "Blur · B · not for secrets",
+        "Пикселизация · X · не для секретов" => {
+            "Pixelate · X · not for secrets"
+        }
         "Область" => "Select area",
         "Перемещение" => "Move objects",
         "Карандаш" => "Pen",
