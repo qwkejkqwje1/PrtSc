@@ -257,7 +257,7 @@ fn resize_into_reuses_target_and_matches_wrapper() {
 fn final_manifest_and_provided_icon_are_used() {
     let manifest = include_str!("../assets/app.manifest");
     assert!(manifest.contains("Microsoft.Windows.Common-Controls"));
-    assert!(manifest.contains("1.1.0.0"));
+    assert!(manifest.contains("1.2.0.0"));
     let icon = include_bytes!("../assets/luma.ico");
     assert_eq!(icon.len(), 31680);
     assert_eq!(&icon[..6], &[0, 0, 1, 0, 8, 0]);

@@ -1,3 +1,13 @@
+# PrtSc 1.2.0
+
+- Split image translation from OCR: the main action copies the final screenshot and opens Google Translate Images for manual paste. No local OCR in this path; no claim of automatic upload.
+- Added Translate to OCR result windows: optional in-app keyless Google text translation, with source/target/result, explicit consent by button, bounded background HTTPS POST and browser fallback.
+- Preserved source on failure/close; stale responses after editing or reopening are discarded. No automatic retries or text persistence.
+- Fixed FileDescription resource encoding: `PrtSc - native screenshots` in compiled EXE.
+- Added parser, request-policy, image-URL, stale-result and resource regression tests.
+
+---
+
 # PrtSc 1.1.0
 
 - Added keyless browser translation after local OCR, with an editable preview, nine target languages, explicit confirmation and long-text manual-paste fallback. Ctrl+Shift+T; separate action immediately after the magnifier.

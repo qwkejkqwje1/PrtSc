@@ -1,4 +1,4 @@
-# PrtSc 1.1 architecture
+# PrtSc 1.2 architecture
 
 Rust native Win32, windows-sys; targeted Windows projection for WinRT OCR and Media Foundation. Existing Luma class/crate names remain internal compatibility details.
 
@@ -35,7 +35,11 @@ Google keeps one-response single-use inline multipart handoff, cryptographic loo
 
 Runtime/hardware limitations are explicit in README and QA. Broad Config enum migration and global language removal were deferred to preserve saved JSON compatibility and avoid unrelated final-release risk.
 
-## Translation boundary
-`translate.rs` is a pure URL policy/encoding module. Targets are allowlisted, input controls are checked, UTF-8 bytes are RFC3986 percent-encoded, and the complete ASCII URL is capped at 1800 bytes. Oversized text is rejected rather than truncated. `win_translate.rs` owns the editable native preview, target selection, notices and explicit ShellExecute dispatch. The OCR worker receives only `final_image()`, preserving redactions and unfinished-action export semantics. OCR failure leaves the editor open; cancel returns to it; successful browser dispatch closes it. Manual-paste mode copies text and opens a text-free landing URL, without automating paste.
+## Translation boundaries
+- Image action: `final_image()` finishes pending edits, flattens and crops; `clipboard_image` stores the final pixels; an allowlisted `op=images` Google Translate URL is opened. Only successful shell dispatch closes the editor. No local OCR. **Manual paste remains necessary** because cross-origin file-input injection is unavailable in an arbitrary user's browser. No fake global keystrokes are synthesized.
+- OCR result: `show_ocr_text` adds Translate without adding it to unrelated help/error/link dialogs. `win_translate.rs` keeps the original OCR dialog alive, hides it while the translation window is open, and restores it on close. The source copy is editable; original OCR text is unchanged.
+- `translate.rs`: fixed target allowlist, UTF-8 percent encoding, 5000-character native-request bound, 256KiB response cap, strict segmented JSON parsing and stale-result predicate. Browser fallback retains the former 1800-byte URL policy, no truncation, with text-free landing + full clipboard for long input.
+- `win_text_http.rs`: Windows WinHTTP, fixed HTTPS host/path, normal TLS validation, automatic proxy, redirects disabled, finite phase timeouts, bounded response loop, no keys, no auto-retries. Body is an application/x-www-form-urlencoded POST rather than text in the request URL. This is an undocumented endpoint, not a guaranteed Google API contract.
+- At most one text network job per app is allowed. A monotonic request ID plus source/target comparison discards answers after edits or dialog close/reopen. Result messages do not set the global screenshot busy state. Errors go into the same preview, not a replacement of OCR text. Only target preference is saved; text, URL, request body and result are not persisted by this flow. Browser/clipboard history and Google's processing remain privacy considerations.
 
-`--translation-preview <UTF8_FILE>` is a synthetic QA entry point for testing the actual preview without Windows OCR. It does not perform OCR and is not evidence of recognition or translation accuracy. Tests route HTTPS dispatch to an isolated Wine URL sink; no test text is sent to Google.
+`--translation-preview <UTF8_FILE>` opens the actual OCR result UI with a sample text fixture. It does not perform OCR. Tests register an HTTPS sink only in an isolated Wine prefix for browser-dispatch checks. Native text-translation validation used one synthetic phrase, not user data.

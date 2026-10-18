@@ -1,0 +1,16 @@
+{
+  "compiled_file_description_correct": true,
+  "ocr_no_automatic_request_or_browser": true,
+  "ocr_translate_button_opens_local_dialog": true,
+  "winhttp_live_synthetic_translation": "Привет, мир",
+  "network_result_preserves_source": true,
+  "copy_translation_exact": true,
+  "browser_fallback_keeps_source_and_dialog": true,
+  "long_fallback_no_truncation_no_text_in_url": true,
+  "blank_buttons_disabled": true,
+  "close_restores_unchanged_original_ocr": true,
+  "main_image_action_no_ocr_correct_images_page": true,
+  "clipboard_final_selection_888x436_redaction_retained": true,
+  "image_paste_is_manual_not_automatic_upload": true,
+  "no_text_persistence_in_settings": true
+}

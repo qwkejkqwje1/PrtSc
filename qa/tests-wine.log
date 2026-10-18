@@ -1,13 +1,13 @@
-PrtSc-2ea5d652711df8bb.exe
+PrtSc-7bc0b12cb9476aaa.exe
 
-PrtSc-97fb1e73f84e8942.exe
+PrtSc-8bf98159b5bb79d9.exe
 
 running 0 tests
 
 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
 
-core-181d776eb7bf4a0f.exe
+core-223992749b13e02d.exe
 
 running 36 tests
 test add_undo_redo_preserves_shape ... ok
@@ -47,10 +47,10 @@ test undo_is_not_capped_at_small_count ... ok
 test unknown_export_format_rejected ... ok
 test utc_conversion_and_encoding ... ok
 
-test result: ok. 36 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+test result: ok. 36 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
 
 
-final_release-0c0f7db537d8975d.exe
+final_release-880e8dcd33af4c55.exe
 
 running 15 tests
 test annotation_damage_covers_all_painted_pixels ... ok
@@ -69,17 +69,17 @@ test sample_clock_has_no_gaps_when_capture_is_slow ... ok
 test text_bounds_match_rendered_ink_and_multiline_hitbox ... ok
 test typed_toolbar_style_handles_legacy_configuration_names ... ok
 
-test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.50s
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.52s
 
 
-luma_shot-4cdb43f5f762e54c.exe
+luma_shot-e20d4b92a4e4b499.exe
 
 running 0 tests
 
 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
 
-prtsc-46f74dbfbf6de2c6.exe
+prtsc-1c67e02c28a965fa.exe
 
 running 10 tests
 test browser_handoff_auto_submits_only_png_to_google ... ok
@@ -96,7 +96,7 @@ test png_all_compressions_preserve_pixels ... ok
 test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
 
 
-revision03-12e896b6920fd122.exe
+revision03-d1fd5a4ee59d1d35.exe
 
 running 5 tests
 test gif_stream_has_real_frames_and_correct_timing ... ok
@@ -108,7 +108,7 @@ test utf16_cyrillic_and_surrogates ... ok
 test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
 
-revision04-3e77c1f9e38ac64c.exe
+revision04-dbab50120bcac981.exe
 
 running 4 tests
 test icon_layouts_and_docking_keep_all_actions_and_hitboxes ... ok
@@ -119,17 +119,17 @@ test top_down_nv12_has_bright_top_and_dark_bottom ... ok
 test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
 
-revision05-16b3df615ed99882.exe
+revision05-82cf2e2939749e93.exe
 
 running 3 tests
 test attachment_edges_single_swatch_and_independent_qr ... ok
 test fast_google_payload_is_bounded_jpeg_original_is_exact_png ... ok
 test per_tool_colors_roundtrip_and_redaction_always_opaque ... ok
 
-test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
 
 
-revision06-4030ade51a47ba90.exe
+revision06-5d0a771d48c2d0e6.exe
 
 running 5 tests
 test all_eight_selection_edges_resize_without_scaling_annotations ... ok
@@ -141,7 +141,7 @@ test tool_icons_retain_distinct_colors_including_active_tool ... ok
 test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
 
 
-revision07-416f62deca545816.exe
+revision07-16ccd3716f063c58.exe
 
 running 5 tests
 test badge_is_legible_and_icon_has_optical_sizes ... ok
@@ -153,7 +153,7 @@ test qr_open_and_copy_are_separate_targets ... ok
 test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
 
 
-revision08-eb80a917d733f86d.exe
+revision08-1ba91ce1276aa433.exe
 
 running 2 tests
 test qr_row_is_inside_selection_and_close_to_qr_button ... ok
@@ -162,7 +162,7 @@ test snapshot_vk_is_supported_with_or_without_modifiers ... ok
 test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
 
-translation-45d1d50f98758c0e.exe
+translation-7b9b00b706fbd101.exe
 
 running 6 tests
 test exact_url_boundary_never_truncates ... ok
@@ -173,5 +173,21 @@ test translation_is_immediately_after_search ... ok
 test unicode_and_query_characters_round_trip ... ok
 
 test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+translation12-a612890ae6356b60.exe
+
+running 9 tests
+test experimental_post_has_no_key_or_text_in_path ... ok
+test image_translation_opens_images_not_lens_or_ocr ... ok
+test joins_all_translation_segments_in_order ... ok
+test no_silent_truncation_or_invalid_requests ... ok
+test oversized_response_rejected ... ok
+test post_body_escapes_injection_and_unicode ... ok
+test resource_description_is_encoding_independent ... ok
+test stale_translation_never_replaces_new_text_or_dialog ... ok
+test unexpected_responses_are_not_partial_success ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
 
 

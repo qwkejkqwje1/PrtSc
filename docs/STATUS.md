@@ -1,4 +1,4 @@
-# PrtSc 1.1.0 — scope and acceptance
+# PrtSc 1.2.0 — scope and acceptance
 
 Extends the final 1.0 feature scope with explicit browser translation; unsigned Windows x64 release. Not a claim of bug-free or hardware-certified software.
 
@@ -12,9 +12,11 @@ No new live hosting acceptance; previous Catbox/Litterbox HTTP412 remains unreso
 
 Not included: inline palette/thickness popup (existing color picker preserved), a full Config enum/schema rewrite, total removal of global language state, wholesale window-state redesign, audio, Linux/macOS app, Google Keep, DXGI, performance/resource guarantees. These are not required to fix the confirmed correctness/performance issues and would increase final-release risk.
 
-## Translation in 1.1
-Local Windows OCR reads the final flattened/cropped selection. An editable preview is shown before any browser navigation. The target language is remembered; recognized text and translation URLs are not written to settings/history by this path. The button follows Google search in both toolbar layouts; Ctrl+Shift+T opens the same action. The OCR icon uses scan lines, not the Text tool T.
+## Translation in 1.2
+The main button after search now copies the final image to the system clipboard and opens the official Google Translate Images UI. The user must paste it there (Ctrl+V / Paste an image). This is deliberately not advertised as automatic upload or automatic switch of an ordinary Lens search. It bypasses local OCR. The existing Google Lens search button is unchanged.
 
-Short text is percent-encoded into a fixed HTTPS Google Translate URL only after confirmation. Encoded URLs are limited to 1800 bytes with no truncation. Copy and open preserves long text in the clipboard and opens a text-free landing page for manual paste. Text in URLs can remain in browser history; clipboard history can retain copied content. Neither option makes online translation private from Google. No key, hidden HTTP API or screenshot upload is used for translation.
+Only OCR result windows offer Translate. A separate native window retains editable source, target language and read-only result. An explicit click sends a bounded HTTPS form POST to the undocumented Google text endpoint. No browser, API key or extra runtime is needed for successful in-app translation. Errors preserve source and offer explicit browser fallback; long fallback input is copied for manual paste rather than truncated into a URL. No automatic retries or automatic text transmission.
 
-README has been replaced with English/Russian/Simplified Chinese descriptions and real UI screenshots of synthetic examples. This does not add Chinese app localization. The supplied black-and-white ICO remains unchanged.
+The compiled FileDescription is now ASCII, fixing UTF-8/legacy resource-decoder mojibake in process/task listings. The provided ICO remains unchanged.
+
+An actual WinHTTP request from the Windows EXE under Wine returned «Привет, мир» for synthetic «Hello world». This proves that tested request, not future service availability, translation quality or real Windows OCR acceptance.

@@ -1,16 +1,16 @@
 {
   "product": "PrtSc",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "target": "Windows 10/11 x64",
   "final_feature_scope": false,
   "signed": false,
-  "exe_bytes": 2342400,
-  "sha256": "e946409cc4f93cb3ed58f3e8c96bb10e8ad5ac6b96720a8e21c5f43b01343669",
+  "exe_bytes": 2359296,
+  "sha256": "b0ab75e8a3cedf2857c24a097fa8cb72a875714b1cb3d67787eb665e0a12eaa4",
   "icon_sha256": "a8b0b1bcc03f3b40bad45e4d532353a2856c7cdc766db55772a51e83c4096460",
   "icon_source": "User-provided ICO, unchanged, 8 resolutions",
   "tests": {
-    "linux": 91,
-    "windows_test_exes_under_wine": 91,
+    "linux": 100,
+    "windows_test_exes_under_wine": 100,
     "native_windows_hardware": false,
     "unfinished_action_export_and_undo": true,
     "small_multiline_text_and_esc": true,
@@ -24,13 +24,16 @@
     "external_google_requests_in_test": 0,
     "native_mp4_output_verified": false,
     "translation_url_policy": true,
-    "translation_native_preview_and_dispatch": true
+    "translation_native_preview_and_dispatch": true,
+    "native_winhttp_synthetic_text_translation": true,
+    "compiled_resource_description_verified": true
   },
   "limitations": [
     "Native Windows hardware/DPI/multi-monitor/notifications/Explorer/OCR/browser acceptance remains open",
     "Wine Media Foundation setup returns 0xD0000005; GIF verified",
     "Live Google results and hosting not verified; historical hosting HTTP412 unresolved",
-    "Video captures live pixels, not screenshot annotations; no audio"
+    "Video captures live pixels, not screenshot annotations; no audio",
+    "Image translation requires manual paste into Google Translate; keyless text endpoint is undocumented."
   ],
-  "note": "1.0 final scope plus requested keyless browser translation. Inherited GUI validation is historical; see docs/QA.md."
+  "note": "Separate manual-paste image translation and optional experimental native OCR text translation. No automatic image upload."
 }

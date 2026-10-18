@@ -1,42 +1,36 @@
-# PrtSc 1.1.0 — validation and limits
+# PrtSc 1.2.0 — validation
 
-## Current automated run
+## Automated regression
 
-- **91 tests passed on Linux** and **91 passed as Windows x64 test EXEs under Wine**, serial mode. Includes the 85 regression tests from 1.0 and six new translation tests.
-- Translation tests cover UTF-8/emoji/query escaping, fixed HTTPS origin, allowlisted targets, blank/control input, exact 1800-byte URL limit, no silent truncation, text-free manual-paste URLs, old-settings defaults and button order/non-overlap in both layouts.
-- Windows release and Linux QA binaries compiled with `--locked`; `Cargo.lock` records version 1.1.0. No dependency was added for translation.
+**100 Rust tests passed on Linux and 100 passed as Windows x64 test EXEs under Wine.** Builds used Cargo.lock; no runtime dependency was added. Nine new tests cover request escaping and bounds, segmented Unicode responses, malformed/oversized responses, fixed image UI URL, stale-result rejection and ASCII resource description. The 91 prior tests also passed. See `qa/test-summary.json` and test logs.
 
-## Translation dialog and dispatch
+The test runner uses only executables listed by `cargo test --no-run`, not every EXE in the dependency directory (which can include the ordinary tray application).
 
-The real Windows preview was exercised under Wine/Xvfb using a UTF-8 **fixture**, not a pretend OCR result. Actual ShellExecute navigation was routed to a local test executable registered as the HTTPS handler in an isolated Wine prefix; **no test text was sent to Google**.
+## Native translation checks
 
-Verified:
-1. Opening the preview does not launch the browser.
-2. Cancel and Escape return to the original editor.
-3. Edited Unicode text and the chosen language arrive intact in the explicit HTTPS dispatch. Successful dispatch closes preview and editor.
-4. Long input disables direct URL translation. An attempted direct command still does not navigate or truncate.
-5. Copy and open preserves the full clipboard text and dispatches a landing URL without text; the user must paste manually.
-6. Blank text disables both actions. Settings persist only the target language, not recognized text or a translation URL.
-7. On this Wine runtime, the real translation action reaches OCR, reports unavailable WinRT OCR, preserves the editor and does not open a browser.
+The actual Windows release EXE was run under Wine/Xvfb, using a UTF-8 fixture in place of WinRT OCR. This is a real OCR-result/translation UI test, **not a claim that Windows OCR was tested under Wine**.
 
-This proves preview, encoding and dispatch behavior, **not Windows OCR accuracy, translation quality or successful loading of Google's live website**. Local OCR needs Windows OCR language packages; browser translation needs network access. A shell dispatch success is not proof of a loaded page. Clipboard/browser history can retain text.
+- OCR result offers Translate; no request or browser launch occurs merely by opening the result.
+- The real WinHTTP client sent the synthetic phrase `Hello world` to Google and received `Привет, мир`. Source text remained unchanged, and Copy translation returned the exact result.
+- Browser fallback used an HTTPS test sink registered only inside the isolated Wine prefix. It preserved both text windows and sent the expected short-text URL.
+- Long text disabled native translation and fell back to the full clipboard text plus a URL without text. No truncation. Blank input disabled both actions.
+- Closing the translation window restored the original OCR text, unchanged. Only target preference was saved; no source/result text was written to settings by this path.
+- Main image action did not invoke local OCR: it copied the final 888×436 image, preserved the opaque redaction, opened the official Google Translate Images URL and closed the editor after successful shell dispatch.
+- The user must paste the image in the browser. **Automatic image upload and a completed browser image translation were not implemented or validated.** A direct Lens upload probe did not retain translation-mode parameters; an ordinary search was not silently substituted for translation.
+- VerQueryValueW read the compiled EXE's FileDescription as exactly `PrtSc - native screenshots`. This fixes the UTF-8/legacy-codepage resource mojibake seen in task listings. Actual Windows Task Manager rendering remains a Windows-hardware acceptance item.
 
-Evidence: `qa/translation-native.json`, `qa/test-summary.json`, `qa/tests-linux.log`, `qa/tests-wine.log`. The C probes are test fixtures, not app dependencies. `--translation-preview <UTF8_FILE>` deliberately bypasses OCR for reproducible GUI checks.
+Evidence: `qa/native-translation12.json`, `assets/screenshots/translation.png`, `assets/screenshots/ocr.png`. The text translation screenshot shows a real Google response to a synthetic phrase, with fixture input rather than recognized user data.
+
+Service-error responses and stale-result combinations have deterministic unit coverage. Live service availability is not guaranteed; a forced HTTP 429/403 and all GUI failure variants were not tested against Google. The client has no automatic retry, normal TLS checks, disabled redirects, phase timeouts, 5000-character input cap and a 256KiB response cap. The endpoint is undocumented and may change.
 
 ## Google image-search regression
 
-Six runs in real headless Chromium, all external requests intercepted locally: three original-PNG and three fast-JPEG uploads, with eight idle preconnections kept open. All generated a multipart POST, correct image field/filename and 888×436 pixels, no Referrer, and completed a simulated 303 redirect. Exactly one loopback page response per run. Local page-to-POST time was about **42–99 ms** for this synthetic warm-browser case. **Not live Google latency, cold-browser time, or a performance promise.** See `qa/google-browser07.json`.
+Six intercepted headless Chromium runs passed: original PNG and fast JPEG, eight idle preconnections, correct multipart image field/filename/dimensions, no Referrer, and a simulated redirect. No external Google traffic was used for this regression. Synthetic warm-browser local page-to-POST timings were roughly 36–95ms, **not live Google latency**. Search remains separate from image translation. See `qa/google-browser07.json`.
 
-## Screenshots
+## Privacy and remaining limits
 
-`assets/screenshots/` contains current screenshots of the actual app under Wine. Editor examples are synthetic demo content; the translation preview uses a documented sample-text fixture. No completed translation or live OCR result is fabricated. English/Russian UI remains supported; Chinese is README copy, not new app localization. The user-provided black-and-white icon is unchanged.
+Only the synthetic test phrase was used in the live text request; no user screenshot or OCR text was sent in native tests. Recognized text is sent only after an explicit Translate click. Image pixels leave the app only when pasted/uploaded on Google's page. Browser and clipboard history may retain content; Google's processing is online. No text/translation cache is persisted by this feature.
 
-## Inherited validation
+Inherited release validation is described in [QA-1.1-history.md](QA-1.1-history.md) and [QA-1.0-history.md](QA-1.0-history.md). Old screenshots/results are historical, not all GUI scenarios rerun in 1.2.
 
-The earlier 1.0 GUI/GIF/render-damage validation is preserved in [QA-1.0-history.md](QA-1.0-history.md) and the historical files in `qa/`. Those results are historical, not all rerun as GUI scenarios in 1.1. The complete Rust regression suite was rerun. Previous release-specific screenshots are historical; current gallery is under `assets/screenshots/`.
-
-## Still requires real Windows acceptance
-
-MP4 Media Foundation output (Wine setup fails with 0xD0000005), WinRT OCR language behavior, mixed DPI/multi-monitor, system notifications, real browser reuse/navigation, Explorer integration and live Google results. GIF is the recording format verified in this environment in 1.0. Windows N may need Media Feature Pack. Builds are unsigned.
-
-No new live upload-host testing was done; historical Catbox/Litterbox HTTP 412 is unresolved. PrintWindow is cooperative capture, not guaranteed bypass of protected content. No audio, Linux/macOS GUI or latency/RAM guarantees are claimed.
+Still requires real Windows acceptance: installed WinRT OCR languages, native MP4/Media Foundation output, mixed DPI/multi-monitor, system notifications, Explorer/browser reuse and Google image clipboard paste. MP4 setup fails under this Wine runtime; GIF was verified in 1.0. Windows N may need Media Feature Pack. Builds are unsigned. Historical Catbox/Litterbox HTTP 412 remains unresolved. PrintWindow is cooperative, not guaranteed protected-content bypass.

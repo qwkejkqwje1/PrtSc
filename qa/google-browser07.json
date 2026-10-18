@@ -14,7 +14,7 @@
       "field": true,
       "filename": true,
       "localRequests": 1,
-      "pageToPostMs": 98.67500100000007
+      "pageToPostMs": 94.74379099999987
     },
     {
       "mode": "original",
@@ -28,7 +28,7 @@
       "field": true,
       "filename": true,
       "localRequests": 1,
-      "pageToPostMs": 74.82526300000018
+      "pageToPostMs": 37.566200999999865
     },
     {
       "mode": "original",
@@ -42,7 +42,7 @@
       "field": true,
       "filename": true,
       "localRequests": 1,
-      "pageToPostMs": 42.25772000000006
+      "pageToPostMs": 52.948036
     },
     {
       "mode": "fast",
@@ -56,7 +56,7 @@
       "field": true,
       "filename": true,
       "localRequests": 1,
-      "pageToPostMs": 42.48290900000029
+      "pageToPostMs": 43.49242000000004
     },
     {
       "mode": "fast",
@@ -70,7 +70,7 @@
       "field": true,
       "filename": true,
       "localRequests": 1,
-      "pageToPostMs": 43.28200599999991
+      "pageToPostMs": 48.200834000000214
     },
     {
       "mode": "fast",
@@ -84,7 +84,7 @@
       "field": true,
       "filename": true,
       "localRequests": 1,
-      "pageToPostMs": 43.695818000000145
+      "pageToPostMs": 35.99075300000004
     }
   ]
 }

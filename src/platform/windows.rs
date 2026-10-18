@@ -5,6 +5,8 @@ mod native;
 #[path = "win_paint.rs"]
 mod paint;
 use dialogs::{child, history_proc, settings_proc, text_proc};
+#[path = "win_text_http.rs"]
+mod text_http;
 #[path = "win_translate.rs"]
 mod translate_ui;
 #[path = "win_video.rs"]
@@ -131,7 +133,12 @@ impl Session {
 }
 enum Work {
     Saved(PathBuf),
-    Translation(String),
+    TextTranslation {
+        request: u64,
+        source: String,
+        target: String,
+        result: Result<String, String>,
+    },
     Text {
         title: String,
         text: String,
@@ -169,6 +176,7 @@ struct TextState {
     url: Option<String>,
     hwnd: HWND,
     edit: HWND,
+    ocr: bool,
 }
 struct HistoryState {
     hwnd: HWND,
@@ -203,6 +211,8 @@ struct App {
     settings: Option<SettingsState>,
     text: Option<TextState>,
     translation: Option<translate_ui::TranslationState>,
+    translation_request: u64,
+    translation_network_busy: bool,
     history: Option<HistoryState>,
     icon: HICON,
     window_icon: HICON,
@@ -316,6 +326,8 @@ fn run_mode(demo: bool, preview: Option<String>) -> Result<(), String> {
             settings: None,
             text: None,
             translation: None,
+            translation_request: 0,
+            translation_network_busy: false,
             history: None,
             icon: small_icon,
             window_icon,
@@ -364,7 +376,8 @@ fn run_mode(demo: bool, preview: Option<String>) -> Result<(), String> {
             state.start(true)?;
         }
         if let Some(text) = preview {
-            state.show_translation(&text)?;
+            state.close_editor();
+            state.show_ocr_text("Распознанный текст", &text);
         }
         let mut msg: MSG = zeroed();
         while GetMessageW(&mut msg, null_mut(), 0, 0) > 0 {
@@ -697,10 +710,14 @@ impl App {
             }
             match job.result {
                 Err(e) => self.fail(&e),
-                Ok(Work::Translation(text)) => {
-                    if let Err(e) = self.show_translation(&text) {
-                        self.fail(&e);
-                    }
+                Ok(Work::TextTranslation {
+                    request,
+                    source,
+                    target,
+                    result,
+                }) => {
+                    self.translation_network_busy = false;
+                    self.finish_text_translation(request, &source, &target, result);
                 }
                 Ok(Work::Saved(p)) => {
                     self.close_editor();
@@ -710,7 +727,7 @@ impl App {
                     if copy {
                         let _ = native::clipboard_text(self.main, &text);
                     }
-                    self.show_text(&title, &text, None)
+                    self.show_ocr_text(&title, &text)
                 }
                 Ok(Work::Scroll(image, screen)) => {
                     self.close_editor();
@@ -1020,11 +1037,11 @@ impl App {
             }
             ABOUT => {
                 let help = if luma_shot::i18n::english() {
-                    "PrtSc 1.1\r\nCapture. Explain. Share.\r\nNative Rust. No clutter. Yours to keep.\r\n\r\nPrintScreen — capture · drag to select · Alt+click — window\r\nEnter / Ctrl+C — copy · Ctrl+S — save · Ctrl+Shift+S — Save as\r\nCtrl+G — Google · Ctrl+T — offline OCR · Ctrl+Q — read QR\r\nCtrl+Shift+T — translate recognized text in browser (preview first)\r\nCtrl+Z / Ctrl+Shift+Z — undo / redo\r\nDrag an edge to resize · click outside for a new area · M — move annotations · P — pen · L — line\r\nA — arrow · R — rectangle · O — oval · H — highlight\r\nB — blur · X — pixelate (not for secrets)\r\nT — text · D — opaque redaction · N — numbered step · I — color picker\r\nClick the single color swatch; each drawing tool remembers its color. Hover icons for labels.\r\nVideo camera / Ctrl+Shift+R — record selected live area. Stop with Ctrl+Shift+R or Stop.\r\nFormat, FPS and output folder are in Settings. GIF: up to 1280px / 15 FPS. No audio.\r\nCursor recording is optional in Settings. Video does NOT include screenshot annotations/redactions.\r\nUpload arrow — selected host; links are public. Google button sends the final selection.\r\nQR is local; links are never opened automatically. OCR uses installed Windows OCR languages.\r\nOpaque redaction removes covered pixels in exports; undo and the original remain in the editor.\r\nExperimental PrintWindow is cooperative capture, NOT a guaranteed Telegram protection bypass.\r\nPerformance targets need validation on real Windows hardware."
+                    "PrtSc 1.2\r\nCapture. Explain. Share.\r\nNative Rust. No clutter. Yours to keep.\r\n\r\nPrintScreen — capture · drag to select · Alt+click — window\r\nEnter / Ctrl+C — copy · Ctrl+S — save · Ctrl+Shift+S — Save as\r\nCtrl+G — Google · Ctrl+T — offline OCR · Ctrl+Q — read QR\r\nCtrl+Shift+T — translate the image in Google (paste with Ctrl+V)\r\nCtrl+Z / Ctrl+Shift+Z — undo / redo\r\nDrag an edge to resize · click outside for a new area · M — move annotations · P — pen · L — line\r\nA — arrow · R — rectangle · O — oval · H — highlight\r\nB — blur · X — pixelate (not for secrets)\r\nT — text · D — opaque redaction · N — numbered step · I — color picker\r\nClick the single color swatch; each drawing tool remembers its color. Hover icons for labels.\r\nVideo camera / Ctrl+Shift+R — record selected live area. Stop with Ctrl+Shift+R or Stop.\r\nFormat, FPS and output folder are in Settings. GIF: up to 1280px / 15 FPS. No audio.\r\nCursor recording is optional in Settings. Video does NOT include screenshot annotations/redactions.\r\nUpload arrow — selected host; links are public. Google button sends the final selection.\r\nQR is local; links are never opened automatically. OCR uses installed Windows OCR languages.\r\nOpaque redaction removes covered pixels in exports; undo and the original remain in the editor.\r\nExperimental PrintWindow is cooperative capture, NOT a guaranteed Telegram protection bypass.\r\nPerformance targets need validation on real Windows hardware."
                 } else {
-                    "PrtSc 1.1\r\nВыделил. Объяснил. Отправил.\r\nМастер скриншотов. Нативный Rust. Без лишнего. Навсегда.\r\n\r\nPrintScreen — снимок · мышь — выделение · Alt+щелчок — окно\r\nEnter / Ctrl+C — копировать · Ctrl+S — сохранить · Ctrl+Shift+S — сохранить как\r\nCtrl+G — Google · Ctrl+T — OCR офлайн · Ctrl+Q — прочитать QR\r\nCtrl+Shift+T — перевод текста в браузере (сначала предпросмотр)\r\nCtrl+Z / Ctrl+Shift+Z — отменить / повторить\r\nКрай рамки — размер · вне рамки — новая область · M — перемещение пометок · P — карандаш · L — линия\r\nA — стрелка · R — прямоугольник · O — овал · H — маркер\r\nB — размытие · X — пикселизация (не для секретов)\r\nT — текст · D — скрыть данные · N — номер шага · I — пипетка\r\nНажмите на цвет: он сохраняется отдельно для каждого инструмента. Наведите на значок для пояснения.\r\nКинокамера / Ctrl+Shift+R — запись живой области. Остановка: Ctrl+Shift+R или Стоп.\r\nФормат, частота и папка — в настройках. GIF: до 1280 пикселей / 15 FPS. Без звука.\r\nКурсор в записи отключается в настройках. Видеозапись НЕ включает пометки и закрашивание из редактора снимка.\r\nСтрелка загрузки — выбранный фотохостинг; ссылки публичные. Google отправляет итоговое выделение.\r\nQR читается локально; ссылки открываются только по вашему клику. OCR использует языки Windows OCR.\r\nНепрозрачная заливка удаляет закрытые пиксели при экспорте; исходник и отмена остаются в редакторе.\r\nЭкспериментальный PrintWindow — не гарантированный обход защиты Telegram.\r\nЦелевые задержки и память требуют проверки на реальной Windows."
+                    "PrtSc 1.2\r\nВыделил. Объяснил. Отправил.\r\nМастер скриншотов. Нативный Rust. Без лишнего. Навсегда.\r\n\r\nPrintScreen — снимок · мышь — выделение · Alt+щелчок — окно\r\nEnter / Ctrl+C — копировать · Ctrl+S — сохранить · Ctrl+Shift+S — сохранить как\r\nCtrl+G — Google · Ctrl+T — OCR офлайн · Ctrl+Q — прочитать QR\r\nCtrl+Shift+T — перевод картинки в Google (вставить Ctrl+V)\r\nCtrl+Z / Ctrl+Shift+Z — отменить / повторить\r\nКрай рамки — размер · вне рамки — новая область · M — перемещение пометок · P — карандаш · L — линия\r\nA — стрелка · R — прямоугольник · O — овал · H — маркер\r\nB — размытие · X — пикселизация (не для секретов)\r\nT — текст · D — скрыть данные · N — номер шага · I — пипетка\r\nНажмите на цвет: он сохраняется отдельно для каждого инструмента. Наведите на значок для пояснения.\r\nКинокамера / Ctrl+Shift+R — запись живой области. Остановка: Ctrl+Shift+R или Стоп.\r\nФормат, частота и папка — в настройках. GIF: до 1280 пикселей / 15 FPS. Без звука.\r\nКурсор в записи отключается в настройках. Видеозапись НЕ включает пометки и закрашивание из редактора снимка.\r\nСтрелка загрузки — выбранный фотохостинг; ссылки публичные. Google отправляет итоговое выделение.\r\nQR читается локально; ссылки открываются только по вашему клику. OCR использует языки Windows OCR.\r\nНепрозрачная заливка удаляет закрытые пиксели при экспорте; исходник и отмена остаются в редакторе.\r\nЭкспериментальный PrintWindow — не гарантированный обход защиты Telegram.\r\nЦелевые задержки и память требуют проверки на реальной Windows."
                 };
-                self.show_text(luma_shot::i18n::tr("PrtSc 1.1 · Справка"), help, None);
+                self.show_text(luma_shot::i18n::tr("PrtSc 1.2 · Справка"), help, None);
                 return;
             }
             _ => {}
@@ -1147,21 +1164,9 @@ impl App {
                 );
             }
             TRANSLATE => {
-                // Only the flattened/cropped image reaches OCR. Never the hidden source.
-                // Keep the editor until OCR succeeds; neither text nor pixels leave here.
-                self.spawn(
-                    "Распознаём текст для перевода",
-                    move || {
-                        let text = native::ocr(&image)?;
-                        if text.trim().is_empty() {
-                            return Err(luma_shot::i18n::tr(
-                                "Текст не найден. Попробуйте выделить область точнее.",
-                            )
-                            .into());
-                        }
-                        Ok(Work::Translation(text))
-                    },
-                );
+                if let Err(e) = self.translate_image(image) {
+                    self.fail(&e);
+                }
             }
             OCR => {
                 let enabled = self.config.history_enabled;
@@ -1315,7 +1320,10 @@ impl App {
                     (PIXELATE_TOOL, "Пикселизация · X · не для секретов"),
                     (PIN, "Закрепить поверх окон"),
                     (QR, "Прочитать QR локально"),
-                    (TRANSLATE, "Перевести текст · Ctrl+Shift+T · через браузер"),
+                    (
+                        TRANSLATE,
+                        "Перевести картинку · Ctrl+Shift+T · вставить в Google",
+                    ),
                     (SCROLL, "Длинный снимок — экспериментально"),
                     (PRINT, "Печать…"),
                     (HEX, "Копировать HEX под курсором"),

@@ -675,6 +675,25 @@ impl App {
             }
         }
     }
+    pub(super) fn show_ocr_text(&mut self, title: &str, text: &str) {
+        self.show_text(title, text, None);
+        if let Some(s) = &mut self.text {
+            s.ocr = true;
+            unsafe {
+                child(
+                    s.hwnd,
+                    "BUTTON",
+                    "Перевести",
+                    WS_TABSTOP,
+                    210,
+                    470,
+                    140,
+                    32,
+                    5,
+                );
+            }
+        }
+    }
     pub(super) fn show_text(&mut self, title: &str, text: &str, pending: Option<Image>) {
         unsafe {
             if let Some(old) = self.text.take() {
@@ -763,7 +782,12 @@ impl App {
                     3,
                 );
             }
-            self.text = Some(TextState { hwnd, edit, url });
+            self.text = Some(TextState {
+                hwnd,
+                edit,
+                url,
+                ocr: false,
+            });
             ShowWindow(hwnd, SW_SHOW);
             SetForegroundWindow(hwnd);
             SetFocus(edit);
@@ -1113,7 +1137,15 @@ pub(super) unsafe extern "system" fn text_proc(
 ) -> LRESULT {
     if msg == WM_GETMINMAXINFO {
         let limits = &mut *(l as *mut MINMAXINFO);
-        limits.ptMinTrackSize.x = 600;
+        limits.ptMinTrackSize.x = if app(hwnd)
+            .and_then(|a| a.text.as_ref())
+            .map(|s| s.ocr)
+            .unwrap_or(false)
+        {
+            700
+        } else {
+            600
+        };
         limits.ptMinTrackSize.y = 360;
         return 0;
     }
@@ -1140,6 +1172,16 @@ pub(super) unsafe extern "system" fn text_proc(
             WM_COMMAND => {
                 match w as u16 {
                     1 => a.text_submit(),
+                    5 => {
+                        if let Some(s) = &a.text {
+                            if s.ocr {
+                                let text = value(s.edit);
+                                if let Err(e) = a.show_translation(&text) {
+                                    a.fail(&e);
+                                }
+                            }
+                        }
+                    }
                     3 => {
                         if let Some(url) = a.text.as_ref().and_then(|s| s.url.as_ref()) {
                             native::open(Path::new(url));
@@ -1181,6 +1223,16 @@ pub(super) unsafe extern "system" fn text_proc(
                     }
                     if !GetDlgItem(hwnd, 3).is_null() {
                         MoveWindow(GetDlgItem(hwnd, 3), 16, height - 50, 180, 32, 1);
+                    }
+                    if !GetDlgItem(hwnd, 5).is_null() {
+                        MoveWindow(
+                            GetDlgItem(hwnd, 5),
+                            if s.url.is_some() { 210 } else { 16 },
+                            height - 50,
+                            140,
+                            32,
+                            1,
+                        );
                     }
                     let b = GetDlgItem(hwnd, 1);
                     MoveWindow(b, (width - 300).max(16), height - 50, 144, 32, 1);

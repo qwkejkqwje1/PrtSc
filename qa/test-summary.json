@@ -1,57 +1,61 @@
 {
-  "wine_passed": 91,
+  "wine_passed": 100,
   "runs": [
     {
-      "exe": "PrtSc-2ea5d652711df8bb.exe",
+      "exe": "PrtSc-7bc0b12cb9476aaa.exe",
       "passed": 0
     },
     {
-      "exe": "PrtSc-97fb1e73f84e8942.exe",
+      "exe": "PrtSc-8bf98159b5bb79d9.exe",
       "passed": 0
     },
     {
-      "exe": "core-181d776eb7bf4a0f.exe",
+      "exe": "core-223992749b13e02d.exe",
       "passed": 36
     },
     {
-      "exe": "final_release-0c0f7db537d8975d.exe",
+      "exe": "final_release-880e8dcd33af4c55.exe",
       "passed": 15
     },
     {
-      "exe": "luma_shot-4cdb43f5f762e54c.exe",
+      "exe": "luma_shot-e20d4b92a4e4b499.exe",
       "passed": 0
     },
     {
-      "exe": "prtsc-46f74dbfbf6de2c6.exe",
+      "exe": "prtsc-1c67e02c28a965fa.exe",
       "passed": 10
     },
     {
-      "exe": "revision03-12e896b6920fd122.exe",
+      "exe": "revision03-d1fd5a4ee59d1d35.exe",
       "passed": 5
     },
     {
-      "exe": "revision04-3e77c1f9e38ac64c.exe",
+      "exe": "revision04-dbab50120bcac981.exe",
       "passed": 4
     },
     {
-      "exe": "revision05-16b3df615ed99882.exe",
+      "exe": "revision05-82cf2e2939749e93.exe",
       "passed": 3
     },
     {
-      "exe": "revision06-4030ade51a47ba90.exe",
+      "exe": "revision06-5d0a771d48c2d0e6.exe",
       "passed": 5
     },
     {
-      "exe": "revision07-416f62deca545816.exe",
+      "exe": "revision07-16ccd3716f063c58.exe",
       "passed": 5
     },
     {
-      "exe": "revision08-eb80a917d733f86d.exe",
+      "exe": "revision08-1ba91ce1276aa433.exe",
       "passed": 2
     },
     {
-      "exe": "translation-45d1d50f98758c0e.exe",
+      "exe": "translation-7b9b00b706fbd101.exe",
       "passed": 6
+    },
+    {
+      "exe": "translation12-a612890ae6356b60.exe",
+      "passed": 9
     }
   ]
 }

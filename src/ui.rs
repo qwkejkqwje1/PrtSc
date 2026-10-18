@@ -230,7 +230,7 @@ impl Layout {
             ),
             (
                 Action::Translate,
-                "Перевести текст · Ctrl+Shift+T · через браузер",
+                "Перевести картинку · Ctrl+Shift+T · вставить в Google",
             ),
             (Action::Copy, "Копировать · Enter / Ctrl+C"),
             (

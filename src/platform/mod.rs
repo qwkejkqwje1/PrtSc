@@ -8,7 +8,7 @@ pub fn error(e: &str) {
 }
 #[cfg(not(windows))]
 pub fn run(_demo: bool) -> Result<(), String> {
-    Err("PrtSc 1.1: только Windows 10/11 x64".into())
+    Err("PrtSc 1.2: только Windows 10/11 x64".into())
 }
 #[cfg(not(windows))]
 pub fn capture_file(_p: &std::path::Path) -> Result<(), String> {
